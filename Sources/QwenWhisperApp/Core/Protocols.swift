@@ -37,4 +37,11 @@ protocol LaunchAtLoginManaging: AnyObject {
 protocol ModelRuntimeManaging: Sendable {
     func resetAll() async throws
     func cachedAvailability(settings: AppSettings) async -> ModelAvailability
+    /// Eagerly loads the Whisper model into memory if it is already downloaded.
+    /// No-op if the model is not cached. Safe to call concurrently.
+    func preloadWhisperIfCached(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
+    /// Clears any corrupted/partial Whisper files from disk and re-downloads + loads the model.
+    func retryWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
+    /// Clears any corrupted Qwen state and re-downloads + loads the model.
+    func retryQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
 }

@@ -9,8 +9,12 @@ import MLXLMCommon
 struct ModelAvailability: Sendable, Equatable {
     enum State: Sendable, Equatable {
         case idle
+        /// Model is warming up (CoreML compilation, initial load).
         case loading
-        case downloading
+        /// Model is actively processing: Whisper is transcribing, Qwen is rewriting.
+        case processing
+        /// Associated value is download fraction 0.0–1.0, or 0 if unknown.
+        case downloading(Double)
         case ready
         case failed(String)
     }
@@ -73,6 +77,57 @@ actor ModelManager: ModelRuntimeManaging {
         return availability
     }
 
+    func preloadWhisperIfCached(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async {
+        // Only warm up if there is something already on disk — never trigger a download.
+        guard existingWhisperDirectory(settings: settings) != nil
+                || fileManager.fileExists(atPath: rootURL.appendingPathComponent("whisper-\(safeFileName(settings.whisperModelID)).json").path)
+        else {
+            DiagnosticTrace.write("Whisper preload skipped — model not cached.")
+            return
+        }
+        DiagnosticTrace.write("Whisper preload started in background.")
+        try? await prepareWhisper(settings: settings, progress: progress)
+    }
+
+    func retryWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async {
+        DiagnosticTrace.write("Retrying Whisper model \(settings.whisperModelID).")
+        // Clear the in-memory runtime so prepareWhisper will re-initialize.
+        whisperKit = nil
+        // Remove the model directory so WhisperKit re-downloads it from scratch.
+        if let existingDir = existingWhisperDirectory(settings: settings) {
+            try? fileManager.removeItem(at: existingDir)
+            DiagnosticTrace.write("Removed Whisper directory: \(existingDir.lastPathComponent).")
+        }
+        // Remove the fingerprint so cachedAvailability shows the model as absent.
+        let fp = rootURL.appendingPathComponent("whisper-\(safeFileName(settings.whisperModelID)).json")
+        try? fileManager.removeItem(at: fp)
+
+        do {
+            try await prepareWhisper(settings: settings, progress: progress)
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            DiagnosticTrace.write("Whisper retry failed: \(message)")
+            progress(.failed(message))
+        }
+    }
+
+    func retryQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async {
+        DiagnosticTrace.write("Retrying Qwen model \(settings.qwenModelID).")
+        // Clear the in-memory container so prepareQwen will re-initialize.
+        qwenContainer = nil
+        // Remove the fingerprint so prepareQwen treats the model as not yet downloaded.
+        let fp = rootURL.appendingPathComponent("qwen-\(safeFileName(settings.qwenModelID)).json")
+        try? fileManager.removeItem(at: fp)
+
+        do {
+            _ = try await prepareQwen(settings: settings, progress: progress)
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            DiagnosticTrace.write("Qwen retry failed: \(message)")
+            progress(.failed(message))
+        }
+    }
+
     func prepareWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws {
         if whisperKit != nil {
             DiagnosticTrace.write("Whisper runtime already initialized for model \(settings.whisperModelID).")
@@ -80,17 +135,30 @@ actor ModelManager: ModelRuntimeManaging {
             return
         }
 
-        progress(existingWhisperDirectory(settings: settings) != nil ? .loading : .downloading)
+        let existingFolder = existingWhisperDirectory(settings: settings)
+        progress(existingFolder != nil ? .loading : .downloading(0))
         DiagnosticTrace.write("Preparing Whisper runtime for model \(settings.whisperModelID).")
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         let whisperDownloadBase = rootURL.appendingPathComponent("whisper-downloads", isDirectory: true)
-        let whisper = try await createWhisperRuntime(
-            modelID: settings.whisperModelID,
-            downloadBase: whisperDownloadBase
-        )
 
-        if let modelFolder = whisper.value.modelFolder {
-            try persistFingerprint(for: modelFolder, key: "whisper-\(settings.whisperModelID)")
+        // Download phase (skipped if model folder already exists on disk).
+        let modelFolder: URL
+        if let existing = existingFolder {
+            modelFolder = existing
+        } else {
+            modelFolder = try await downloadWhisperModel(
+                modelID: settings.whisperModelID,
+                downloadBase: whisperDownloadBase,
+                onProgress: { fraction in progress(.downloading(fraction)) }
+            )
+        }
+
+        // Load + prewarm phase (CoreML compilation).
+        progress(.loading)
+        let whisper = try await loadWhisperRuntime(modelFolder: modelFolder)
+
+        if let modelFolderFromKit = whisper.value.modelFolder {
+            try persistFingerprint(for: modelFolderFromKit, key: "whisper-\(settings.whisperModelID)")
         }
 
         whisperKit = whisper
@@ -207,12 +275,16 @@ actor ModelManager: ModelRuntimeManaging {
             throw AppFailure.rewriteFailed(preflightFailure)
         }
 
-        progress(existingQwenFingerprint(settings: settings) ? .loading : .downloading)
+        progress(existingQwenFingerprint(settings: settings) ? .loading : .downloading(0))
         DiagnosticTrace.write("Preparing Qwen container for model \(settings.qwenModelID).")
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         let rootURL = self.rootURL
         let modelID = settings.qwenModelID
-        let loaded = try await loadQwenContainerOnCPU(rootURL: rootURL, modelID: modelID) { message in
+        let loaded = try await loadQwenContainerOnCPU(
+            rootURL: rootURL,
+            modelID: modelID,
+            downloadProgress: { fraction in progress(.downloading(fraction)) }
+        ) { message in
             DiagnosticTrace.write(message)
         }
         let modelDirectory = loaded.modelDirectory
@@ -292,24 +364,32 @@ actor ModelManager: ModelRuntimeManaging {
             return nil
         }
 
-        let developerDirectory = ProcessInfo.processInfo.environment["DEVELOPER_DIR"] ?? "/Library/Developer/CommandLineTools"
-        if developerDirectory.contains("CommandLineTools") {
-            return "Qwen rewrite is unavailable in the current `swift run` environment because MLX Metal shaders are missing. Install full Xcode and launch an Xcode-built app bundle, or continue with Whisper-only output."
-        }
-
-        return "Qwen rewrite runtime is missing MLX Metal shaders (`default.metallib`)."
+        return "MLX Metal shaders not found (mlx.metallib missing next to executable). Run scripts/run-dev.sh to auto-download them."
     }
 
-    nonisolated private func createWhisperRuntime(modelID: String, downloadBase: URL) async throws -> WhisperRuntimeBox {
+    /// Downloads the Whisper model variant from HuggingFace and returns the local folder URL.
+    nonisolated private func downloadWhisperModel(
+        modelID: String,
+        downloadBase: URL,
+        onProgress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        try await WhisperKit.download(
+            variant: modelID,
+            downloadBase: downloadBase,
+            from: "argmaxinc/whisperkit-coreml",
+            progressCallback: { p in onProgress(p.fractionCompleted) }
+        )
+    }
+
+    /// Loads an already-downloaded Whisper model folder into memory and prewarns it.
+    nonisolated private func loadWhisperRuntime(modelFolder: URL) async throws -> WhisperRuntimeBox {
         let whisper = try await WhisperKit(
             WhisperKitConfig(
-                model: modelID,
-                downloadBase: downloadBase,
-                modelRepo: "argmaxinc/whisperkit-coreml",
+                modelFolder: modelFolder.path,
                 logLevel: .debug,
                 prewarm: true,
                 load: true,
-                download: true
+                download: false
             )
         )
         return WhisperRuntimeBox(value: whisper)
