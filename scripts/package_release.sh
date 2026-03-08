@@ -9,16 +9,51 @@ fi
 VERSION="$1"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
-APP_NAME="QwenWhisper"
+APP_NAME="${APP_NAME:-QwenWhisper}"
+EXECUTABLE_NAME="${EXECUTABLE_NAME:-QwenWhisperApp}"
+BUNDLE_ID="${BUNDLE_ID:-com.hukopo.qwenwhisper}"
+MIN_OS_VERSION="${MIN_OS_VERSION:-14.0}"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$ROOT_DIR/scripts/macos/entitlements.plist}"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-EXECUTABLE_SRC="$ROOT_DIR/.build/arm64-apple-macosx/release/QwenWhisperApp"
-EXECUTABLE_DST="$MACOS_DIR/QwenWhisperApp"
+EXECUTABLE_SRC="$ROOT_DIR/.build/arm64-apple-macosx/release/$EXECUTABLE_NAME"
+EXECUTABLE_DST="$MACOS_DIR/$EXECUTABLE_NAME"
 ZIP_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.zip"
 DMG_STAGING_DIR="$DIST_DIR/${APP_NAME}-dmg-staging"
 DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.dmg"
+
+sign_app_bundle() {
+  local path="$1"
+
+  if [[ -z "$SIGNING_IDENTITY" ]]; then
+    return 0
+  fi
+
+  codesign \
+    --force \
+    --sign "$SIGNING_IDENTITY" \
+    --timestamp \
+    --options runtime \
+    --entitlements "$ENTITLEMENTS_PATH" \
+    "$path"
+}
+
+sign_disk_image() {
+  local path="$1"
+
+  if [[ -z "$SIGNING_IDENTITY" ]]; then
+    return 0
+  fi
+
+  codesign \
+    --force \
+    --sign "$SIGNING_IDENTITY" \
+    --timestamp \
+    "$path"
+}
 
 rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_STAGING_DIR" "$DMG_PATH"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
@@ -37,21 +72,23 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>QwenWhisperApp</string>
+  <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
-  <string>com.hukopo.qwenwhisper</string>
+  <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>QwenWhisper</string>
+  <string>${APP_NAME}</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
   <string>${VERSION}</string>
   <key>CFBundleVersion</key>
   <string>${VERSION}</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>${MIN_OS_VERSION}</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
@@ -59,6 +96,12 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
+
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+  sign_app_bundle "$APP_DIR"
+  codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+  spctl --assess --type execute --verbose=2 "$APP_DIR" || true
+fi
 
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 
@@ -73,9 +116,19 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH" >/dev/null
 
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+  sign_disk_image "$DMG_PATH"
+  codesign --verify --verbose=2 "$DMG_PATH"
+fi
+
 rm -rf "$DMG_STAGING_DIR"
 
 echo "Created:"
 echo "  $APP_DIR"
 echo "  $ZIP_PATH"
 echo "  $DMG_PATH"
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+  echo "Signed with: $SIGNING_IDENTITY"
+else
+  echo "Signed with: none (unsigned build)"
+fi

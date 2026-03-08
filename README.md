@@ -107,9 +107,30 @@ Tests:
 swift build --build-tests
 ```
 
+## Install From GitHub
+
+Download the latest macOS build from Releases:
+
+- `.dmg`: recommended install path
+- `.zip`: alternative raw bundle download
+
+Current release page:
+
+- [v0.0.1](https://github.com/hukopo/qwenwishper/releases/tag/v0.0.1)
+
+Install steps:
+
+1. Download `QwenWhisper-<version>-macos-arm64.dmg`.
+2. Open the DMG.
+3. Drag `QwenWhisper.app` into `Applications`.
+4. Launch the app.
+5. Grant Microphone and Accessibility permissions.
+
+If macOS blocks the first launch, use `Right Click -> Open`.
+
 ## Release Packaging
 
-To produce a downloadable `.app` bundle from the current SwiftPM executable:
+To produce a local `.app` bundle and distributable archives:
 
 ```bash
 ./scripts/package_release.sh 0.0.1
@@ -120,6 +141,8 @@ This creates:
 - `dist/QwenWhisper.app`
 - `dist/QwenWhisper-0.0.1-macos-arm64.zip`
 - `dist/QwenWhisper-0.0.1-macos-arm64.dmg`
+
+For signing and notarization, see [docs/releasing.md](docs/releasing.md).
 
 ## Troubleshooting
 
@@ -140,3 +163,4 @@ If the `Qwen` model shows failed or the logs mention missing MLX Metal shaders, 
 
 - `swift test` in this environment still requires a full Xcode installation. With Command Line Tools only, test targets build, but the runner cannot start correctly.
 - launch-at-login is most reliable from a proper `.app` bundle.
+- signed and notarized release automation is prepared in `.github/workflows/release.yml`, but real notarized releases still require your Apple Developer signing credentials in GitHub repository secrets.
