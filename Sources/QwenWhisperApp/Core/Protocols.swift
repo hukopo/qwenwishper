@@ -1,0 +1,40 @@
+import Foundation
+
+protocol SpeechRecognizer: Sendable {
+    func transcribe(audioURL: URL) async throws -> TranscriptionResultPayload
+}
+
+protocol TextRewriter: Sendable {
+    func rewrite(inputText: String, locale: Locale, mode: RewriteMode) async throws -> RewriteResultPayload
+}
+
+protocol TextInjector: Sendable {
+    func insert(text: String) throws -> InsertResult
+}
+
+protocol AudioCapturing: AnyObject {
+    func startRecording(maxDuration: Duration, onMaxDurationReached: @escaping @Sendable () -> Void) throws
+    func stopRecording() throws -> AudioCaptureService.Recording
+    func cancelRecording()
+}
+
+protocol PermissionManaging: AnyObject, Sendable {
+    func ensureMicrophoneAccess() async -> Bool
+    func isAccessibilityTrusted(prompt: Bool) -> Bool
+}
+
+protocol HotkeyMonitoring: AnyObject {
+    var onPress: (() -> Void)? { get set }
+    var onRelease: (() -> Void)? { get set }
+    func register(_ descriptor: HotkeyDescriptor) throws
+    func unregister()
+}
+
+protocol LaunchAtLoginManaging: AnyObject {
+    func setEnabled(_ enabled: Bool) throws
+}
+
+protocol ModelRuntimeManaging: Sendable {
+    func resetAll() async throws
+    func cachedAvailability(settings: AppSettings) async -> ModelAvailability
+}
