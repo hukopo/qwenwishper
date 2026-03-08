@@ -17,8 +17,10 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 EXECUTABLE_SRC="$ROOT_DIR/.build/arm64-apple-macosx/release/QwenWhisperApp"
 EXECUTABLE_DST="$MACOS_DIR/QwenWhisperApp"
 ZIP_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.zip"
+DMG_STAGING_DIR="$DIST_DIR/${APP_NAME}-dmg-staging"
+DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.dmg"
 
-rm -rf "$APP_DIR" "$ZIP_PATH"
+rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_STAGING_DIR" "$DMG_PATH"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cd "$ROOT_DIR"
@@ -60,6 +62,20 @@ EOF
 
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 
+mkdir -p "$DMG_STAGING_DIR"
+cp -R "$APP_DIR" "$DMG_STAGING_DIR/"
+ln -s /Applications "$DMG_STAGING_DIR/Applications"
+
+hdiutil create \
+  -volname "$APP_NAME" \
+  -srcfolder "$DMG_STAGING_DIR" \
+  -ov \
+  -format UDZO \
+  "$DMG_PATH" >/dev/null
+
+rm -rf "$DMG_STAGING_DIR"
+
 echo "Created:"
 echo "  $APP_DIR"
 echo "  $ZIP_PATH"
+echo "  $DMG_PATH"

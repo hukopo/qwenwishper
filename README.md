@@ -119,6 +119,7 @@ This creates:
 
 - `dist/QwenWhisper.app`
 - `dist/QwenWhisper-0.0.1-macos-arm64.zip`
+- `dist/QwenWhisper-0.0.1-macos-arm64.dmg`
 
 ## Troubleshooting
 
