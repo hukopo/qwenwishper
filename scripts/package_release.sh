@@ -15,6 +15,11 @@ BUNDLE_ID="${BUNDLE_ID:-com.hukopo.qwenwhisper}"
 MIN_OS_VERSION="${MIN_OS_VERSION:-14.0}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
 ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$ROOT_DIR/scripts/macos/entitlements.plist}"
+# MLX Metal shaders — must be bundled next to the executable for Qwen inference.
+# Path is taken from the env or the default dev-build cache location.
+MLX_METALLIB="${MLX_METALLIB:-$ROOT_DIR/.build/mlx.metallib}"
+MLX_VERSION="0.30.6"
+MLX_WHEEL_URL="https://files.pythonhosted.org/packages/f3/85/44406b521f920248fad621334d4dc15e77660a494edf890e7cbee33bf38d/mlx_metal-${MLX_VERSION}-py3-none-macosx_14_0_arm64.whl"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -58,11 +63,27 @@ sign_disk_image() {
 rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_STAGING_DIR" "$DMG_PATH"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
+# Ensure mlx.metallib is available (download from PyPI if not cached).
+if [[ ! -f "$MLX_METALLIB" ]]; then
+  echo "mlx.metallib not found at $MLX_METALLIB — downloading from PyPI (one-time, ~37 MB)…"
+  TMP_WHEEL="$(mktemp /tmp/mlx_metal_XXXXXX.whl)"
+  curl -fsSL "$MLX_WHEEL_URL" -o "$TMP_WHEEL"
+  unzip -p "$TMP_WHEEL" "mlx/lib/mlx.metallib" > "$MLX_METALLIB"
+  rm -f "$TMP_WHEEL"
+  echo "✓ mlx.metallib saved ($(du -sh "$MLX_METALLIB" | cut -f1))"
+else
+  echo "✓ mlx.metallib found at $MLX_METALLIB ($(du -sh "$MLX_METALLIB" | cut -f1))"
+fi
+
 cd "$ROOT_DIR"
 swift build -c release
 
 cp "$EXECUTABLE_SRC" "$EXECUTABLE_DST"
 chmod +x "$EXECUTABLE_DST"
+
+# Bundle the MLX Metal shaders so Qwen works without Xcode on end-user machines.
+cp "$MLX_METALLIB" "$MACOS_DIR/mlx.metallib"
+echo "✓ mlx.metallib bundled into app"
 
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
