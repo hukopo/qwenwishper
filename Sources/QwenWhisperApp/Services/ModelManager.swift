@@ -296,15 +296,23 @@ actor ModelManager: ModelRuntimeManaging {
         }
 
         let alreadyCached = existingQwenFingerprint(settings: settings)
+        // Show .loading immediately when cached — Hub still verifies files on disk but
+        // that should not look like a network download to the user.
         progress(alreadyCached ? .loading : .downloading(0))
         DiagnosticTrace.write("Preparing Qwen container for model \(settings.qwenModelID). cached=\(alreadyCached)")
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         let rootURL = self.rootURL
         let modelID = settings.qwenModelID
+        // Suppress Hub's file-verification progress when the model is already on disk —
+        // those callbacks look like a network download even though no bytes are fetched.
+        func makeDownloadProgressCallback() -> @Sendable (Double) -> Void {
+            if alreadyCached { return { _ in } }
+            return { fraction in progress(.downloading(fraction)) }
+        }
         let loaded = try await loadQwenContainerOnCPU(
             rootURL: rootURL,
             modelID: modelID,
-            downloadProgress: { fraction in progress(.downloading(fraction)) },
+            downloadProgress: makeDownloadProgressCallback(),
             onDownloadComplete: { progress(.loading) }
         ) { message in
             DiagnosticTrace.write(message)
