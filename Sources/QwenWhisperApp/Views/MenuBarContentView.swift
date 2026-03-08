@@ -7,15 +7,30 @@ struct MenuBarContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: controller.status.systemImage)
-                VStack(alignment: .leading) {
-                    Text("QwenWhisper")
-                        .font(.headline)
-                    Text(controller.status.label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                HStack {
+                    Image(systemName: controller.status.systemImage)
+                    VStack(alignment: .leading) {
+                        Text("QwenWhisper")
+                            .font(.headline)
+                        Text(controller.status.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
+                HStack(spacing: 8) {
+                    Button("Diagnostics") {
+                        openWindow(id: "diagnostics")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button("Quit") {
+                        NSApplication.shared.terminate(nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
 
             Button(controller.isRecordingActive ? "Stop Recording" : "Start Recording") {
@@ -37,7 +52,7 @@ struct MenuBarContentView: View {
             }
 
             GroupBox("Models") {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Whisper: \(label(for: controller.modelAvailability.whisper))")
                     Text("Qwen: \(label(for: controller.modelAvailability.qwen))")
                 }
@@ -45,16 +60,11 @@ struct MenuBarContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if let snapshot = controller.lastSnapshot {
-                GroupBox("Last Result") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(snapshot.rewrittenText)
-                            .font(.callout)
-                            .lineLimit(4)
-                        Text("Source: \(snapshot.sourceText)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+            GroupBox("Texts") {
+                VStack(alignment: .leading, spacing: 10) {
+                    CopyableTextSection(title: "After Whisper", text: controller.latestWhisperText, minHeight: 70)
+                    CopyableTextSection(title: "After Qwen", text: controller.latestQwenText, minHeight: 70)
+                    if let snapshot = controller.lastSnapshot {
                         Text("Inserted via \(snapshot.insertMethod.rawValue)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -62,32 +72,7 @@ struct MenuBarContentView: View {
                 }
             }
 
-            GroupBox("Recent Logs") {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(controller.diagnostics.prefix(6)) { entry in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.message)
-                                    .font(.caption)
-                                Text(entry.timestamp.formatted(date: .omitted, time: .standard))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 120, alignment: .topLeading)
-            }
-
-            HStack {
-                Button("Diagnostics") {
-                    openWindow(id: "diagnostics")
-                }
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
-            }
+            CopyableTextSection(title: "Recent Logs", text: controller.diagnosticsText, font: .caption.monospaced(), minHeight: 120)
         }
         .padding(14)
         .onAppear {

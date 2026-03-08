@@ -24,6 +24,8 @@ final class AppController: ObservableObject {
     @Published var diagnostics: [DiagnosticsEntry] = []
     @Published var microphoneAuthorized = false
     @Published var accessibilityAuthorized = false
+    @Published var latestWhisperText = ""
+    @Published var latestQwenText = ""
 
     private let settingsStore: SettingsStore
     private let logger: AppLogger
@@ -41,6 +43,13 @@ final class AppController: ObservableObject {
 
     var isRecordingActive: Bool { status == .recording }
     var canToggleRecording: Bool { !isProcessing || isRecording }
+    var diagnosticsText: String {
+        diagnostics
+            .map {
+                "[\($0.timestamp.formatted(date: .omitted, time: .standard))] \($0.level.rawValue.uppercased()): \($0.message)"
+            }
+            .joined(separator: "\n")
+    }
 
     convenience init() {
         let settingsStore = SettingsStore()
@@ -163,6 +172,8 @@ final class AppController: ObservableObject {
         guard !isProcessing else {
             throw AppFailure.alreadyBusy
         }
+        latestWhisperText = ""
+        latestQwenText = ""
         let microphoneGranted: Bool
         if microphoneAuthorized {
             microphoneGranted = true
@@ -225,6 +236,7 @@ final class AppController: ObservableObject {
         record("Starting transcription for \(recording.url.lastPathComponent).", level: .info)
         let transcription = try await speechRecognizer.transcribe(audioURL: recording.url)
         updateModelAvailability(.whisper, to: .ready)
+        latestWhisperText = transcription.text
         record(
             "Transcribed \(String(format: "%.2f", transcription.latency.secondsValue))s audio. textLength=\(transcription.text.count).",
             level: .info
@@ -253,6 +265,7 @@ final class AppController: ObservableObject {
             record("Rewrite fallback: \(message)", level: .warning)
             finalText = transcription.text
         }
+        latestQwenText = finalText
 
         status = .pasting
         try await Task.sleep(for: .milliseconds(settings.pasteDelayMs))
