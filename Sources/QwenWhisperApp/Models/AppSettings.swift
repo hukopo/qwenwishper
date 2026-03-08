@@ -48,6 +48,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     static let defaults = AppSettings(
         hotkey: HotkeyDescriptor.Preset.commandShiftSpace.descriptor,
         launchAtLogin: false,
+        didPromptLaunchAtLogin: false,
         pasteDelayMs: 120,
         maxRecordingSeconds: 30,
         whisperModelID: "base",
@@ -57,6 +58,7 @@ struct AppSettings: Codable, Equatable, Sendable {
 
     var hotkey: HotkeyDescriptor
     var launchAtLogin: Bool
+    var didPromptLaunchAtLogin: Bool
     var pasteDelayMs: Int
     var maxRecordingSeconds: Int
     var whisperModelID: String

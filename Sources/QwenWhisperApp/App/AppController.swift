@@ -40,6 +40,7 @@ final class AppController: ObservableObject {
 
     private var isProcessing = false
     private var isRecording = false
+    private var hasStarted = false
 
     var isRecordingActive: Bool { status == .recording }
     var canToggleRecording: Bool { !isProcessing || isRecording }
@@ -100,11 +101,14 @@ final class AppController: ObservableObject {
     }
 
     func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         NSApp.setActivationPolicy(.accessory)
         refreshCachedModelAvailability()
         refreshPermissions(promptForAccessibility: false)
         installHotkey()
         syncLaunchAtLogin()
+        promptForLaunchAtLoginIfNeeded()
     }
 
     func saveSettings() {
@@ -304,6 +308,35 @@ final class AppController: ObservableObject {
             try launchAtLoginService.setEnabled(settings.launchAtLogin)
         } catch {
             record("Launch at login update failed: \(error.localizedDescription)", level: .warning)
+        }
+    }
+
+    private func promptForLaunchAtLoginIfNeeded() {
+        guard settings.didPromptLaunchAtLogin == false else { return }
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            NSApp.activate(ignoringOtherApps: true)
+
+            let alert = NSAlert()
+            alert.messageText = "Launch QwenWhisper at login?"
+            alert.informativeText = "QwenWhisper works best as a menu bar utility that starts with macOS."
+            alert.addButton(withTitle: "Enable")
+            alert.addButton(withTitle: "Not now")
+            alert.alertStyle = .informational
+
+            let response = alert.runModal()
+            settings.didPromptLaunchAtLogin = true
+
+            if response == .alertFirstButtonReturn {
+                settings.launchAtLogin = true
+                record("User enabled launch at login from first-run prompt.", level: .info)
+            } else {
+                record("User skipped launch at login from first-run prompt.", level: .info)
+            }
+
+            saveSettings()
         }
     }
 
