@@ -134,7 +134,11 @@ final class AppController: ObservableObject {
         }
         promptForAccessibilityIfNeeded()
         preloadWhisperInBackground()
-        preloadQwenInBackground()
+        if settings.qwenEnabled {
+            preloadQwenInBackground()
+        } else {
+            modelAvailability.qwen = .disabled
+        }
     }
 
     func saveSettings() {
@@ -142,8 +146,23 @@ final class AppController: ObservableObject {
             try settingsStore.save(settings)
             installHotkey()
             syncLaunchAtLogin()
+            syncQwenEnabledState()
         } catch {
             record(error.localizedDescription, level: .error)
+        }
+    }
+
+    /// Reflects the current `settings.qwenEnabled` in `modelAvailability` immediately,
+    /// and kicks off a background preload when Qwen is turned on for the first time.
+    private func syncQwenEnabledState() {
+        if settings.qwenEnabled {
+            // If it was just enabled and not yet loaded, kick off preload.
+            if modelAvailability.qwen == .disabled {
+                modelAvailability.qwen = .idle
+                preloadQwenInBackground()
+            }
+        } else {
+            modelAvailability.qwen = .disabled
         }
     }
 
@@ -336,26 +355,32 @@ final class AppController: ObservableObject {
         )
         record("Whisper text: \(transcription.text)", level: .info)
 
-        updateModelAvailability(.qwen, to: .processing)
-        status = .rewriting
-        record("Starting rewrite. sourceLength=\(transcription.text.count).", level: .info)
         let finalText: String
-        do {
-            let rewrite = try await textRewriter.rewrite(
-                inputText: transcription.text,
-                locale: Locale(identifier: "ru_RU"),
-                mode: .aggressive
-            )
-            updateModelAvailability(.qwen, to: .ready)
-            record(
-                "Rewriter finished in \(String(format: "%.2f", rewrite.latency.secondsValue))s. rewrittenLength=\(rewrite.rewrittenText.count).",
-                level: .info
-            )
-            finalText = rewrite.rewrittenText
-        } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            updateModelAvailability(.qwen, to: .failed(message))
-            record("Rewrite fallback: \(message)", level: .warning)
+        if settings.qwenEnabled {
+            updateModelAvailability(.qwen, to: .processing)
+            status = .rewriting
+            record("Starting rewrite. sourceLength=\(transcription.text.count).", level: .info)
+            do {
+                let rewrite = try await textRewriter.rewrite(
+                    inputText: transcription.text,
+                    locale: Locale(identifier: "ru_RU"),
+                    mode: .aggressive
+                )
+                updateModelAvailability(.qwen, to: .ready)
+                record(
+                    "Rewriter finished in \(String(format: "%.2f", rewrite.latency.secondsValue))s. rewrittenLength=\(rewrite.rewrittenText.count).",
+                    level: .info
+                )
+                finalText = rewrite.rewrittenText
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                updateModelAvailability(.qwen, to: .failed(message))
+                record("Rewrite fallback: \(message)", level: .warning)
+                finalText = transcription.text
+            }
+        } else {
+            // Qwen is disabled — paste Whisper text directly without rewriting.
+            record("Qwen disabled, skipping rewrite.", level: .info)
             finalText = transcription.text
         }
         latestQwenText = finalText

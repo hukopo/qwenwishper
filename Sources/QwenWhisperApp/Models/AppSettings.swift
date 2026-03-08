@@ -53,6 +53,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         maxRecordingSeconds: 30,
         whisperModelID: ModelCatalog.defaultWhisperModelID,
         qwenModelID: ModelCatalog.defaultQwenModelID,
+        qwenEnabled: true,
         loggingEnabled: true,
         qwenSystemPrompt: ""
     )
@@ -64,6 +65,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     var maxRecordingSeconds: Int
     var whisperModelID: String
     var qwenModelID: String
+    /// When false the Qwen rewrite step is skipped entirely; Whisper text is pasted as-is.
+    var qwenEnabled: Bool
     var loggingEnabled: Bool
     var qwenSystemPrompt: String
 
@@ -75,6 +78,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         maxRecordingSeconds: Int,
         whisperModelID: String,
         qwenModelID: String,
+        qwenEnabled: Bool,
         loggingEnabled: Bool,
         qwenSystemPrompt: String
     ) {
@@ -85,6 +89,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         self.maxRecordingSeconds = maxRecordingSeconds
         self.whisperModelID = whisperModelID
         self.qwenModelID = qwenModelID
+        self.qwenEnabled = qwenEnabled
         self.loggingEnabled = loggingEnabled
         self.qwenSystemPrompt = qwenSystemPrompt
     }
@@ -98,6 +103,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         maxRecordingSeconds = try container.decode(Int.self, forKey: .maxRecordingSeconds)
         whisperModelID = try container.decode(String.self, forKey: .whisperModelID)
         qwenModelID = try container.decode(String.self, forKey: .qwenModelID)
+        // Default true — old settings files without this key keep Qwen enabled.
+        qwenEnabled = (try? container.decode(Bool.self, forKey: .qwenEnabled)) ?? true
         loggingEnabled = try container.decode(Bool.self, forKey: .loggingEnabled)
         qwenSystemPrompt = (try? container.decode(String.self, forKey: .qwenSystemPrompt)) ?? ""
     }

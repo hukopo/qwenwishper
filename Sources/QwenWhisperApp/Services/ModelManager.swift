@@ -17,6 +17,8 @@ struct ModelAvailability: Sendable, Equatable {
         case downloading(Double)
         case ready
         case failed(String)
+        /// Model is intentionally disabled by the user.
+        case disabled
     }
 
     var whisper: State = .idle
@@ -69,9 +71,15 @@ actor ModelManager: ModelRuntimeManaging {
             availability.whisper = .ready
         }
 
-        let qwenFingerprint = rootURL.appendingPathComponent("qwen-\(safeFileName(settings.qwenModelID)).json")
-        if fileManager.fileExists(atPath: qwenFingerprint.path) {
+        if !settings.qwenEnabled {
+            availability.qwen = .disabled
+        } else if qwenContainer != nil {
             availability.qwen = .ready
+        } else {
+            let qwenFingerprint = rootURL.appendingPathComponent("qwen-\(safeFileName(settings.qwenModelID)).json")
+            if fileManager.fileExists(atPath: qwenFingerprint.path) {
+                availability.qwen = .ready
+            }
         }
 
         return availability
@@ -284,8 +292,9 @@ actor ModelManager: ModelRuntimeManaging {
 
     func prepareQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws -> ModelContainer {
         if let qwenContainer {
+            // Container already in memory — return immediately without emitting a progress
+            // event, so callers like finishRecordingAndProcess can manage state themselves.
             DiagnosticTrace.write("Qwen container already initialized for model \(settings.qwenModelID).")
-            progress(.ready)
             return qwenContainer
         }
 
@@ -317,11 +326,19 @@ actor ModelManager: ModelRuntimeManaging {
         ) { message in
             DiagnosticTrace.write(message)
         }
-        let modelDirectory = loaded.modelDirectory
-        try persistFingerprint(for: modelDirectory, key: "qwen-\(settings.qwenModelID)")
+        // Store the container immediately so subsequent calls get the fast path,
+        // even if fingerprint writing below fails.
         let container = loaded.container
         qwenContainer = container
         progress(.ready)
+        // Persist a lightweight marker (file sizes only, no full SHA256 read) so
+        // cachedAvailability and preloadQwenIfCached know the model is on disk.
+        // Non-fatal: a failure here only means the next launch re-verifies files.
+        do {
+            try persistFingerprint(for: loaded.modelDirectory, key: "qwen-\(settings.qwenModelID)")
+        } catch {
+            DiagnosticTrace.write("Qwen fingerprint write failed (non-fatal): \(error.localizedDescription)")
+        }
         return container
     }
 
@@ -332,6 +349,9 @@ actor ModelManager: ModelRuntimeManaging {
         try data.write(to: fingerprintURL, options: .atomic)
     }
 
+    /// Builds a lightweight fingerprint using file paths and sizes only — no file content
+    /// is read into memory. This is fast even for multi-GB model directories and avoids
+    /// OOM errors that SHA256 on large shards would cause.
     private func buildFingerprint(for directory: URL) throws -> ModelFingerprint {
         guard fileManager.fileExists(atPath: directory.path) else {
             throw AppFailure.modelDownloadFailed("Model directory missing at \(directory.path)")
@@ -348,10 +368,10 @@ actor ModelManager: ModelRuntimeManaging {
             let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values.isRegularFile == true else { continue }
 
-            let data = try Data(contentsOf: fileURL)
-            let digest = SHA256.hash(data: data).compactMap { String(format: "%02x", $0) }.joined()
             let relativePath = fileURL.path.replacingOccurrences(of: directory.path + "/", with: "")
-            entries.append(.init(relativePath: relativePath, byteCount: Int64(values.fileSize ?? 0), sha256: digest))
+            // sha256 field is kept for Codable compatibility but left empty —
+            // Hub's own download verification already ensures file integrity.
+            entries.append(.init(relativePath: relativePath, byteCount: Int64(values.fileSize ?? 0), sha256: ""))
         }
 
         if entries.isEmpty {

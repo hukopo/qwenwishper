@@ -74,8 +74,12 @@ struct MenuBarContentView: View {
 
             GroupBox("Texts") {
                 VStack(alignment: .leading, spacing: 10) {
-                    CopyableTextSection(title: "After Whisper", text: controller.latestWhisperText, minHeight: 70)
-                    CopyableTextSection(title: "After Qwen", text: controller.latestQwenText, minHeight: 70)
+                    if controller.settings.qwenEnabled {
+                        CopyableTextSection(title: "After Whisper", text: controller.latestWhisperText, minHeight: 70)
+                        CopyableTextSection(title: "After Qwen", text: controller.latestQwenText, minHeight: 70)
+                    } else {
+                        CopyableTextSection(title: "Transcribed text", text: controller.latestWhisperText, minHeight: 70)
+                    }
                     if let snapshot = controller.lastSnapshot {
                         Text("Inserted via \(snapshot.insertMethod.rawValue)")
                             .font(.caption2)
@@ -130,6 +134,7 @@ private struct ModelStatusRow: View {
             return f > 0.001 ? "downloading \(Int(f * 100))%" : "downloading…"
         case .ready:            return "ready"
         case .failed:           return "failed"
+        case .disabled:         return "disabled"
         }
     }
 }

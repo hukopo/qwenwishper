@@ -36,6 +36,11 @@ private struct GeneralTab: View {
                 set: { controller.settings.launchAtLogin = $0; controller.saveSettings() }
             ))
 
+            Toggle("Enable Qwen rewriting", isOn: Binding(
+                get: { controller.settings.qwenEnabled },
+                set: { controller.settings.qwenEnabled = $0; controller.saveSettings() }
+            ))
+
             Toggle("Enable logging", isOn: Binding(
                 get: { controller.settings.loggingEnabled },
                 set: { controller.settings.loggingEnabled = $0; controller.saveSettings() }
