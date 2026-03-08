@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarContentView: View {
     @ObservedObject var controller: AppController
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -19,6 +20,13 @@ struct MenuBarContentView: View {
                 }
                 Spacer()
                 HStack(spacing: 8) {
+                    Button("Settings") {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
                     Button("Diagnostics") {
                         openWindow(id: "diagnostics")
                     }
@@ -52,9 +60,13 @@ struct MenuBarContentView: View {
             }
 
             GroupBox("Models") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Whisper: \(label(for: controller.modelAvailability.whisper))")
-                    Text("Qwen: \(label(for: controller.modelAvailability.qwen))")
+                VStack(alignment: .leading, spacing: 6) {
+                    ModelStatusRow(label: "Whisper", state: controller.modelAvailability.whisper) {
+                        controller.retryModel(.whisper)
+                    }
+                    ModelStatusRow(label: "Qwen", state: controller.modelAvailability.qwen) {
+                        controller.retryModel(.qwen)
+                    }
                 }
                 .font(.caption)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,18 +92,44 @@ struct MenuBarContentView: View {
         }
     }
 
-    private func label(for state: ModelAvailability.State) -> String {
+}
+
+private struct ModelStatusRow: View {
+    let label: String
+    let state: ModelAvailability.State
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text("\(label): \(stateLabel)")
+                if case .failed = state {
+                    Button("Retry") { onRetry() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                }
+            }
+            if case .downloading(let fraction) = state, fraction > 0 {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 200)
+            } else if state == .loading || state == .processing {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 200)
+            }
+        }
+    }
+
+    private var stateLabel: String {
         switch state {
-        case .idle:
-            "idle"
-        case .loading:
-            "loading"
-        case .downloading:
-            "downloading"
-        case .ready:
-            "ready"
-        case .failed(let message):
-            "failed (\(message))"
+        case .idle:             return "idle"
+        case .loading:          return "loading…"
+        case .processing:       return label == "Whisper" ? "transcribing…" : "rewriting…"
+        case .downloading(let f):
+            return f > 0.001 ? "downloading \(Int(f * 100))%" : "downloading…"
+        case .ready:            return "ready"
+        case .failed:           return "failed"
         }
     }
 }
