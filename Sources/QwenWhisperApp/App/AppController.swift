@@ -134,6 +134,7 @@ final class AppController: ObservableObject {
         }
         promptForAccessibilityIfNeeded()
         preloadWhisperInBackground()
+        preloadQwenInBackground()
     }
 
     func saveSettings() {
@@ -478,6 +479,25 @@ final class AppController: ObservableObject {
             // Sync cached state in case preload changed availability.
             let availability = await modelRuntime.cachedAvailability(settings: currentSettings)
             modelAvailability = availability
+        }
+    }
+
+    private func preloadQwenInBackground() {
+        let currentSettings = settings
+        Task {
+            await modelRuntime.preloadQwenIfCached(
+                settings: currentSettings,
+                progress: { @Sendable [weak self] state in
+                    Task { @MainActor in self?.updateModelAvailability(.qwen, to: state) }
+                }
+            )
+            // Sync cached state after preload completes.
+            let availability = await modelRuntime.cachedAvailability(settings: currentSettings)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Only update Qwen slot to avoid overwriting Whisper preload progress.
+                self.modelAvailability.qwen = availability.qwen
+            }
         }
     }
 

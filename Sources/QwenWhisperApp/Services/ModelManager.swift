@@ -89,6 +89,26 @@ actor ModelManager: ModelRuntimeManaging {
         try? await prepareWhisper(settings: settings, progress: progress)
     }
 
+    func preloadQwenIfCached(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async {
+        // Skip if the container is already in memory.
+        guard qwenContainer == nil else {
+            DiagnosticTrace.write("Qwen preload skipped — container already in memory.")
+            return
+        }
+        // Skip if Metal shaders are missing — preloading would fail anyway.
+        guard qwenRuntimePreflightFailure() == nil else {
+            DiagnosticTrace.write("Qwen preload skipped — Metal preflight failed.")
+            return
+        }
+        // Only warm up if the model is already downloaded on disk.
+        guard existingQwenFingerprint(settings: settings) else {
+            DiagnosticTrace.write("Qwen preload skipped — model not cached on disk.")
+            return
+        }
+        DiagnosticTrace.write("Qwen preload started in background.")
+        _ = try? await prepareQwen(settings: settings, progress: progress)
+    }
+
     func retryWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async {
         DiagnosticTrace.write("Retrying Whisper model \(settings.whisperModelID).")
         // Clear the in-memory runtime so prepareWhisper will re-initialize.
@@ -275,15 +295,17 @@ actor ModelManager: ModelRuntimeManaging {
             throw AppFailure.rewriteFailed(preflightFailure)
         }
 
-        progress(existingQwenFingerprint(settings: settings) ? .loading : .downloading(0))
-        DiagnosticTrace.write("Preparing Qwen container for model \(settings.qwenModelID).")
+        let alreadyCached = existingQwenFingerprint(settings: settings)
+        progress(alreadyCached ? .loading : .downloading(0))
+        DiagnosticTrace.write("Preparing Qwen container for model \(settings.qwenModelID). cached=\(alreadyCached)")
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         let rootURL = self.rootURL
         let modelID = settings.qwenModelID
         let loaded = try await loadQwenContainerOnCPU(
             rootURL: rootURL,
             modelID: modelID,
-            downloadProgress: { fraction in progress(.downloading(fraction)) }
+            downloadProgress: { fraction in progress(.downloading(fraction)) },
+            onDownloadComplete: { progress(.loading) }
         ) { message in
             DiagnosticTrace.write(message)
         }

@@ -40,6 +40,9 @@ protocol ModelRuntimeManaging: Sendable {
     /// Eagerly loads the Whisper model into memory if it is already downloaded.
     /// No-op if the model is not cached. Safe to call concurrently.
     func preloadWhisperIfCached(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
+    /// Eagerly loads the Qwen model into memory if it is already downloaded and Metal shaders are present.
+    /// No-op otherwise. Safe to call concurrently.
+    func preloadQwenIfCached(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
     /// Clears any corrupted/partial Whisper files from disk and re-downloads + loads the model.
     func retryWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
     /// Clears any corrupted Qwen state and re-downloads + loads the model.

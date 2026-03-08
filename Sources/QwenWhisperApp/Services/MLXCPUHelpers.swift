@@ -7,6 +7,9 @@ func loadQwenContainerOnCPU(
     rootURL: URL,
     modelID: String,
     downloadProgress: @escaping @Sendable (Double) -> Void = { _ in },
+    /// Called after all model files are present on disk but before weights are loaded into memory.
+    /// Use this to transition the UI from "downloading…" to "loading…".
+    onDownloadComplete: @escaping @Sendable () -> Void = {},
     progress: @escaping @Sendable (String) -> Void
 ) async throws -> (modelDirectory: URL, container: ModelContainer) {
     try await Device.withDefaultDevice(.cpu) {
@@ -24,6 +27,9 @@ func loadQwenContainerOnCPU(
             downloadProgress(progressValue.fractionCompleted)
         }
         progress("Qwen downloadModel finished. modelDirectory=\(modelDirectory.path)")
+
+        // Signal transition: files are on disk, now loading weights into memory (slow).
+        onDownloadComplete()
 
         progress("Qwen loadModelContainer started.")
         let container = try await loadModelContainer(hub: hub, configuration: configuration) { progressValue in
