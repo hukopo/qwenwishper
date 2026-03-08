@@ -15,7 +15,7 @@ struct QwenWhisperApp: App {
 
         Settings {
             SettingsView(controller: controller)
-                .frame(width: 420, height: 360)
+                .frame(width: 520, height: 460)
         }
 
         Window("Diagnostics", id: "diagnostics") {
