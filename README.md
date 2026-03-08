@@ -123,10 +123,25 @@ Install steps:
 1. Download `QwenWhisper-<version>-macos-arm64.dmg`.
 2. Open the DMG.
 3. Drag `QwenWhisper.app` into `Applications`.
-4. Launch the app.
-5. Grant Microphone and Accessibility permissions.
+4. Open `Applications` and launch `QwenWhisper.app`.
+5. If macOS warns that the app cannot be opened because the developer cannot be verified, use one of these paths:
+6. `Right Click -> Open -> Open`
+7. or `System Settings -> Privacy & Security -> Open Anyway`
+8. After the app starts, grant Microphone permission.
+9. Grant Accessibility permission so the app can paste text into the active field.
 
-If macOS blocks the first launch, use `Right Click -> Open`.
+What to expect on first launch:
+
+- the app appears in the macOS menu bar
+- it may ask whether it should launch at login
+- it will request microphone access
+- it will need Accessibility access for automatic paste
+
+Unsigned build notes:
+
+- current GitHub releases are not code signed or notarized
+- macOS Gatekeeper may block the first launch until you explicitly allow it
+- once approved, the app should open normally on later launches
 
 ## Release Packaging
 
@@ -145,6 +160,16 @@ This creates:
 For signing and notarization, see [docs/releasing.md](docs/releasing.md).
 
 ## Troubleshooting
+
+### “macOS says the app cannot be opened”
+
+Try this:
+
+1. Move the app into `Applications`.
+2. Right-click the app and choose `Open`.
+3. If that still fails, go to `System Settings -> Privacy & Security`.
+4. Find the warning about `QwenWhisper.app`.
+5. Click `Open Anyway`.
 
 ### “No speech was detected”
 
