@@ -26,6 +26,14 @@ final class AppController: ObservableObject {
     @Published var accessibilityAuthorized = false
     @Published var latestWhisperText = ""
     @Published var latestQwenText = ""
+    @Published var storageSnapshot = StorageSnapshot(
+        appURL: Bundle.main.bundleURL,
+        appSizeBytes: 0,
+        modelsURL: StorageService.makeModelsURL(),
+        modelsSizeBytes: 0,
+        recordingsURL: StorageService.makeRecordingsURL(),
+        recordingsSizeBytes: 0
+    )
 
     private let settingsStore: SettingsStore
     private let logger: AppLogger
@@ -58,15 +66,24 @@ final class AppController: ObservableObject {
         let logger = AppLogger()
         let permissionManager = PermissionManager()
         let modelManager = ModelManager()
+
+        // WeakBoxes let us bind the progress closures to AppController after self.init().
+        let whisperBox = WeakBox<AppController>()
+        let qwenBox = WeakBox<AppController>()
+
         let speechRecognizer = WhisperSpeechRecognizer(
             modelManager: modelManager,
             settingsProvider: { [settingsStore] in settingsStore.load() },
-            progress: { _ in }
+            progress: { @Sendable [whisperBox] state in
+                Task { @MainActor in whisperBox.value?.updateModelAvailability(.whisper, to: state) }
+            }
         )
         let textRewriter = MLXTextRewriter(
             modelManager: modelManager,
             settingsProvider: { [settingsStore] in settingsStore.load() },
-            progress: { _ in }
+            progress: { @Sendable [qwenBox] state in
+                Task { @MainActor in qwenBox.value?.updateModelAvailability(.qwen, to: state) }
+            }
         )
         let dependencies = Dependencies(
             settingsStore: settingsStore,
@@ -82,6 +99,8 @@ final class AppController: ObservableObject {
         )
 
         self.init(settings: settings, dependencies: dependencies)
+        whisperBox.value = self
+        qwenBox.value = self
     }
 
     init(settings: AppSettings, dependencies: Dependencies) {
@@ -104,11 +123,17 @@ final class AppController: ObservableObject {
         guard !hasStarted else { return }
         hasStarted = true
         NSApp.setActivationPolicy(.accessory)
-        refreshCachedModelAvailability()
-        refreshPermissions(promptForAccessibility: false)
         installHotkey()
         syncLaunchAtLogin()
+        populateDefaultPromptIfNeeded()
         promptForLaunchAtLoginIfNeeded()
+        refreshStorageSnapshot()
+        Task {
+            microphoneAuthorized = await permissionManager.ensureMicrophoneAccess()
+            record("Microphone access: \(microphoneAuthorized).", level: .info)
+        }
+        promptForAccessibilityIfNeeded()
+        preloadWhisperInBackground()
     }
 
     func saveSettings() {
@@ -131,16 +156,79 @@ final class AppController: ObservableObject {
         }
     }
 
-    func resetModels() {
+    func clearModels() {
         Task {
             do {
                 try await modelRuntime.resetAll()
                 modelAvailability = ModelAvailability()
                 record("Model caches removed.", level: .warning)
+                refreshStorageSnapshot()
             } catch {
                 record(error.localizedDescription, level: .error)
             }
         }
+    }
+
+    func clearRecordings() {
+        Task {
+            do {
+                try await StorageService.clearRecordings()
+                record("Recordings cleared.", level: .warning)
+                refreshStorageSnapshot()
+            } catch {
+                record(error.localizedDescription, level: .error)
+            }
+        }
+    }
+
+    func openModelsFolder() {
+        StorageService.openModelsFolder()
+    }
+
+    func openRecordingsFolder() {
+        StorageService.openRecordingsFolder()
+    }
+
+    func revealAppInFinder() {
+        StorageService.revealAppInFinder()
+    }
+
+    func resetQwenPrompt() {
+        settings.qwenSystemPrompt = RewritePromptBuilder.defaultSystemPrompt
+        saveSettings()
+    }
+
+    func retryModel(_ kind: ModelKind) {
+        let currentSettings = settings
+        Task {
+            switch kind {
+            case .whisper:
+                record("Retrying Whisper model download.", level: .info)
+                updateModelAvailability(.whisper, to: .downloading(0))
+                await modelRuntime.retryWhisper(
+                    settings: currentSettings,
+                    progress: { @Sendable [weak self] state in
+                        Task { @MainActor in self?.updateModelAvailability(.whisper, to: state) }
+                    }
+                )
+            case .qwen:
+                record("Retrying Qwen model download.", level: .info)
+                updateModelAvailability(.qwen, to: .downloading(0))
+                await modelRuntime.retryQwen(
+                    settings: currentSettings,
+                    progress: { @Sendable [weak self] state in
+                        Task { @MainActor in self?.updateModelAvailability(.qwen, to: state) }
+                    }
+                )
+            }
+            refreshStorageSnapshot()
+        }
+    }
+
+    private func populateDefaultPromptIfNeeded() {
+        guard settings.qwenSystemPrompt.isEmpty else { return }
+        settings.qwenSystemPrompt = RewritePromptBuilder.defaultSystemPrompt
+        saveSettings()
     }
 
     func hotkeyPressed() {
@@ -235,7 +323,7 @@ final class AppController: ObservableObject {
             throw AppFailure.emptySpeech
         }
 
-        updateModelAvailability(.whisper, to: .loading)
+        updateModelAvailability(.whisper, to: .processing)
         status = .transcribing
         record("Starting transcription for \(recording.url.lastPathComponent).", level: .info)
         let transcription = try await speechRecognizer.transcribe(audioURL: recording.url)
@@ -247,7 +335,7 @@ final class AppController: ObservableObject {
         )
         record("Whisper text: \(transcription.text)", level: .info)
 
-        updateModelAvailability(.qwen, to: .loading)
+        updateModelAvailability(.qwen, to: .processing)
         status = .rewriting
         record("Starting rewrite. sourceLength=\(transcription.text.count).", level: .info)
         let finalText: String
@@ -282,6 +370,7 @@ final class AppController: ObservableObject {
         )
         record("Inserted text using \(insertResult.method.rawValue).", level: .info)
         refreshCachedModelAvailability()
+        refreshStorageSnapshot()
     }
 
     private func installHotkey() {
@@ -340,6 +429,17 @@ final class AppController: ObservableObject {
         }
     }
 
+    private func promptForAccessibilityIfNeeded() {
+        Task { @MainActor in
+            // Give the run loop a moment to finish launching before prompting.
+            try? await Task.sleep(for: .milliseconds(600))
+            // prompt:true shows the standard macOS system dialog if not yet trusted,
+            // and returns immediately (true) if already trusted — no extra alert needed.
+            accessibilityAuthorized = permissionManager.isAccessibilityTrusted(prompt: true)
+            record("Accessibility check at launch: granted=\(accessibilityAuthorized)", level: .info)
+        }
+    }
+
     private func wireServices() {
         diagnostics = logger.entries
     }
@@ -351,12 +451,33 @@ final class AppController: ObservableObject {
         }
     }
 
-    private func updateModelAvailability(_ kind: ModelKind, to state: ModelAvailability.State) {
+    func refreshStorageSnapshot() {
+        Task {
+            storageSnapshot = await StorageService.snapshot()
+        }
+    }
+
+    func updateModelAvailability(_ kind: ModelKind, to state: ModelAvailability.State) {
         switch kind {
         case .whisper:
             modelAvailability.whisper = state
         case .qwen:
             modelAvailability.qwen = state
+        }
+    }
+
+    private func preloadWhisperInBackground() {
+        let currentSettings = settings
+        Task {
+            await modelRuntime.preloadWhisperIfCached(
+                settings: currentSettings,
+                progress: { @Sendable [weak self] state in
+                    Task { @MainActor in self?.updateModelAvailability(.whisper, to: state) }
+                }
+            )
+            // Sync cached state in case preload changed availability.
+            let availability = await modelRuntime.cachedAvailability(settings: currentSettings)
+            modelAvailability = availability
         }
     }
 
@@ -380,8 +501,15 @@ final class AppController: ObservableObject {
         record(message, level: .error)
     }
 
-    private enum ModelKind {
+    enum ModelKind {
         case whisper
         case qwen
     }
+}
+
+/// Thread-safe weak reference holder used to break retain cycles in @Sendable closures
+/// that need to call back to AppController after it is initialised.
+final class WeakBox<T: AnyObject>: @unchecked Sendable {
+    weak var value: T?
+    init() {}
 }
