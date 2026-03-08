@@ -6,6 +6,7 @@ import MLXLMCommon
 func loadQwenContainerOnCPU(
     rootURL: URL,
     modelID: String,
+    downloadProgress: @escaping @Sendable (Double) -> Void = { _ in },
     progress: @escaping @Sendable (String) -> Void
 ) async throws -> (modelDirectory: URL, container: ModelContainer) {
     try await Device.withDefaultDevice(.cpu) {
@@ -20,6 +21,7 @@ func loadQwenContainerOnCPU(
         progress("Qwen downloadModel started.")
         let modelDirectory = try await downloadModel(hub: hub, configuration: configuration) { progressValue in
             progress("Qwen download progress callback: \(progressValue)")
+            downloadProgress(progressValue.fractionCompleted)
         }
         progress("Qwen downloadModel finished. modelDirectory=\(modelDirectory.path)")
 
@@ -38,14 +40,18 @@ func rewriteTextOnCPU(
     inputText: String,
     locale: Locale,
     mode: RewriteMode,
+    systemPromptOverride: String = "",
     log: @escaping @Sendable (String) -> Void
 ) async throws -> RewriteResultPayload {
     try await Device.withDefaultDevice(.cpu) {
         log("MLXTextRewriter CPU helper entered.")
         let startedAt = ContinuousClock.now
 
+        let resolvedSystemPrompt = systemPromptOverride.isEmpty
+            ? RewritePromptBuilder.systemPrompt(mode: mode, locale: locale)
+            : systemPromptOverride
         let input = UserInput(chat: [
-            .system(RewritePromptBuilder.systemPrompt(mode: mode, locale: locale)),
+            .system(resolvedSystemPrompt),
             .user(RewritePromptBuilder.userPrompt(for: inputText))
         ])
         log("MLXTextRewriter preparing model input. sourceLength=\(inputText.count)")

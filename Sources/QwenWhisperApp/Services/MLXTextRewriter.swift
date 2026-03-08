@@ -25,7 +25,8 @@ actor MLXTextRewriter: TextRewriter {
             modelContainer: modelContainer,
             inputText: inputText,
             locale: locale,
-            mode: mode
+            mode: mode,
+            systemPromptOverride: settings.qwenSystemPrompt
         ) { message in
             DiagnosticTrace.write(message)
         }
