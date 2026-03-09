@@ -27,10 +27,16 @@ QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into 
 ## Installation
 
 1. Go to [**Releases**](https://github.com/hukopo/qwenwishper/releases/latest) and download `QwenWhisper-<version>-macos-arm64.dmg`
-2. Open the DMG and drag `QwenWhisper.app` into **Applications**
-3. Launch `QwenWhisper` from Applications
+2. Open the DMG
+3. Double-click **"Install QwenWhisper.command"** — Terminal opens, the app is copied to `/Applications` and the quarantine attribute is removed automatically
+4. Launch `QwenWhisper` from Spotlight or Applications
 
-> **Gatekeeper warning?** The app is unsigned. Right-click → **Open** → **Open** to bypass the warning. Alternatively: **System Settings → Privacy & Security → Open Anyway**.
+> **Alternatively:** drag `QwenWhisper.app` into Applications manually, then if macOS says the app is "damaged", run this once in Terminal:
+> ```bash
+> xattr -cr /Applications/QwenWhisper.app
+> ```
+
+> The app is not code-signed. macOS 12+ shows a "damaged" error (not just "unidentified developer") for unsigned apps downloaded from the internet — `xattr -cr` removes the quarantine flag that causes this.
 
 ---
 
@@ -139,16 +145,19 @@ Customize the system prompt that Qwen receives before rewriting. The default pro
 
 ## Troubleshooting
 
-### "The app cannot be opened because the developer cannot be verified"
+### "App is damaged and can't be opened" / "Приложение повреждено"
 
-This is Gatekeeper blocking an unsigned app.
+macOS 12+ shows this for unsigned apps downloaded from the internet. Right-click → Open does **not** work for this specific error.
 
-**Fix:**
-1. Move `QwenWhisper.app` to **Applications**
-2. Right-click the app → **Open**
-3. Click **Open** in the dialog
+**Recommended fix — use the installer in the DMG:**
+Double-click **"Install QwenWhisper.command"** inside the DMG. It removes the quarantine flag automatically.
 
-Or: **System Settings → Privacy & Security → Open Anyway**
+**Manual fix:**
+```bash
+xattr -cr /Applications/QwenWhisper.app
+```
+
+Run this once in Terminal after moving the app to Applications. The app will open normally afterwards.
 
 ---
 

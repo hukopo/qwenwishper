@@ -130,6 +130,13 @@ mkdir -p "$DMG_STAGING_DIR"
 cp -R "$APP_DIR" "$DMG_STAGING_DIR/"
 ln -s /Applications "$DMG_STAGING_DIR/Applications"
 
+# Bundle the installer script so users can double-click to install without quarantine issues.
+INSTALL_SCRIPT="$ROOT_DIR/scripts/install.command"
+if [[ -f "$INSTALL_SCRIPT" ]]; then
+  cp "$INSTALL_SCRIPT" "$DMG_STAGING_DIR/Install QwenWhisper.command"
+  chmod +x "$DMG_STAGING_DIR/Install QwenWhisper.command"
+fi
+
 hdiutil create \
   -volname "$APP_NAME" \
   -srcfolder "$DMG_STAGING_DIR" \
