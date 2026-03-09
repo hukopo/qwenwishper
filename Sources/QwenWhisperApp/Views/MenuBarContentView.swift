@@ -103,6 +103,9 @@ private struct ModelStatusRow: View {
     let state: ModelAvailability.State
     let onRetry: () -> Void
 
+    /// Counts seconds elapsed while in .loading state — updated by an async task.
+    @State private var loadingElapsed: Int = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
@@ -124,18 +127,38 @@ private struct ModelStatusRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: 200, alignment: .leading)
                 }
-            } else if state == .loading || state == .processing {
+            } else if state == .loading {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 200)
+                Text("Загрузка из кэша в память…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if state == .processing {
                 ProgressView()
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 200)
             }
         }
+        // Async ticker: increments loadingElapsed every second while in .loading state.
+        // The task is automatically cancelled when isLoading flips to false.
+        .task(id: isLoading) {
+            guard isLoading else { return }
+            loadingElapsed = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { break }
+                loadingElapsed += 1
+            }
+        }
     }
+
+    private var isLoading: Bool { state == .loading }
 
     private var stateLabel: String {
         switch state {
         case .idle:             return "idle"
-        case .loading:          return "loading…"
+        case .loading:          return "loading… \(loadingElapsed)s"
         case .processing:       return label == "Whisper" ? "transcribing…" : "rewriting…"
         case .downloading(let f):
             return f > 0.001 ? "downloading \(Int(f * 100))%" : "downloading…"
