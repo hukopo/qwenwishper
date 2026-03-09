@@ -12,6 +12,11 @@ final class PanelState: ObservableObject {
 /// Manages a borderless floating NSPanel that shows pipeline status above all windows.
 @MainActor
 final class FloatingStatusPanel {
+    // Fixed panel sizes — avoids relying on fittingSize before SwiftUI finishes layout.
+    private static let pipelineSize = CGSize(width: 56, height: 42)
+    // text(190) + spacing(10) + button(20) + h-pad(24) = 244; 2-line text + v-pad = 52
+    private static let resultSize = CGSize(width: 248, height: 52)
+
     private var panel: NSPanel?
     let state = PanelState()
     private var cancellables = Set<AnyCancellable>()
@@ -25,7 +30,7 @@ final class FloatingStatusPanel {
         let hosting = NSHostingView(rootView: contentView)
 
         let panel = NSPanel(
-            contentRect: CGRect(x: 0, y: 0, width: 80, height: 44),
+            contentRect: CGRect(origin: .zero, size: Self.pipelineSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -103,8 +108,9 @@ final class FloatingStatusPanel {
 
     private func show() {
         guard let panel else { return }
+        let size = state.resultText != nil ? Self.resultSize : Self.pipelineSize
+        positionPanel(panel, size: size)
         if !panel.isVisible {
-            positionPanel(panel)
             state.isVisible = false
             panel.orderFront(nil)
             Task { @MainActor in
@@ -112,18 +118,16 @@ final class FloatingStatusPanel {
                 self.state.isVisible = true
             }
         } else {
-            positionPanel(panel)
             state.isVisible = true
         }
     }
 
-    private func positionPanel(_ panel: NSPanel) {
+    private func positionPanel(_ panel: NSPanel, size: CGSize) {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
-        let fitting = panel.contentView?.fittingSize ?? CGSize(width: 80, height: 44)
-        let x = screenFrame.midX - fitting.width / 2
+        let x = screenFrame.midX - size.width / 2
         let y = screenFrame.minY + 24
-        panel.setFrame(CGRect(origin: CGPoint(x: x, y: y), size: fitting), display: true)
+        panel.setFrame(CGRect(origin: CGPoint(x: x, y: y), size: size), display: true)
     }
 
     private func hide() {
