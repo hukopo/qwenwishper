@@ -13,6 +13,7 @@ protocol TextInjector: Sendable {
 }
 
 protocol AudioCapturing: AnyObject {
+    var onAudioLevel: ((Float) -> Void)? { get set }
     func startRecording(maxDuration: Duration, onMaxDurationReached: @escaping @Sendable () -> Void) throws
     func stopRecording() throws -> AudioCaptureService.Recording
     func cancelRecording()

@@ -19,6 +19,7 @@ final class AppController: ObservableObject {
 
     @Published var settings: AppSettings
     @Published var status: PipelineStatus = .idle
+    @Published var audioLevel: Float = -160
     @Published var lastSnapshot: DictationSnapshot?
     @Published var modelAvailability = ModelAvailability()
     @Published var diagnostics: [DiagnosticsEntry] = []
@@ -49,6 +50,7 @@ final class AppController: ObservableObject {
     private var isProcessing = false
     private var isRecording = false
     private var hasStarted = false
+    private let floatingPanel = FloatingStatusPanel()
 
     var isRecordingActive: Bool { status == .recording }
     var canToggleRecording: Bool { !isProcessing || isRecording }
@@ -123,6 +125,7 @@ final class AppController: ObservableObject {
         guard !hasStarted else { return }
         hasStarted = true
         NSApp.setActivationPolicy(.accessory)
+        floatingPanel.setup(controller: self)
         installHotkey()
         syncLaunchAtLogin()
         populateDefaultPromptIfNeeded()
@@ -174,6 +177,10 @@ final class AppController: ObservableObject {
             status = .idle
             record("Permissions refreshed.", level: .info)
         }
+    }
+
+    func dismissError() {
+        if case .error = status { status = .idle }
     }
 
     func openDocumentsPrivacySettings() {
@@ -313,6 +320,9 @@ final class AppController: ObservableObject {
         status = .recording
         isRecording = true
 
+        audioCaptureService.onAudioLevel = { [weak self] level in
+            self?.audioLevel = level
+        }
         try audioCaptureService.startRecording(maxDuration: .seconds(settings.maxRecordingSeconds)) { [weak self] in
             Task { @MainActor in
                 self?.hotkeyReleased()
@@ -339,6 +349,8 @@ final class AppController: ObservableObject {
             }
         }
 
+        audioCaptureService.onAudioLevel = nil
+        audioLevel = -160
         let recording = try audioCaptureService.stopRecording()
         record(
             "Recording finished: \(recording.url.lastPathComponent) (\(String(format: "%.2f", recording.durationSeconds))s).",
@@ -550,6 +562,14 @@ final class AppController: ObservableObject {
         refreshCachedModelAvailability()
         DiagnosticTrace.write("AppController.handle errorType=\(String(describing: type(of: error))) message=\(message)")
         record(message, level: .error)
+
+        // When microphone is denied macOS won't show the dialog again —
+        // open System Settings so the user can toggle it there.
+        if let failure = error as? AppFailure, failure == .microphoneDenied {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     enum ModelKind {

@@ -1,11 +1,13 @@
 import AVFoundation
 import Foundation
 
-final class AudioCaptureService: NSObject, AudioCapturing {
+final class AudioCaptureService: NSObject, AudioCapturing, @unchecked Sendable {
     struct Recording {
         let url: URL
         let durationSeconds: TimeInterval
     }
+
+    var onAudioLevel: ((Float) -> Void)?
 
     private let fileManager: FileManager
     private let recordingsDirectory: URL
@@ -13,6 +15,7 @@ final class AudioCaptureService: NSObject, AudioCapturing {
     private var activeURL: URL?
     private var stopTask: Task<Void, Never>?
     private var recordingStartedAt: Date?
+    private var meterTimer: Timer?
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -37,6 +40,7 @@ final class AudioCaptureService: NSObject, AudioCapturing {
             AVLinearPCMIsFloatKey: false,
         ]
         let recorder = try AVAudioRecorder(url: targetURL, settings: settings)
+        recorder.isMeteringEnabled = true
         recorder.prepareToRecord()
         guard recorder.record() else {
             throw AppFailure.transcriptionFailed("Failed to start the audio recorder.")
@@ -47,6 +51,13 @@ final class AudioCaptureService: NSObject, AudioCapturing {
         self.recorder = recorder
         self.activeURL = targetURL
         self.recordingStartedAt = Date()
+
+        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self, let recorder = self.recorder else { return }
+            recorder.updateMeters()
+            let level = recorder.averagePower(forChannel: 0)
+            self.onAudioLevel?(level)
+        }
 
         stopTask = Task {
             try? await Task.sleep(for: maxDuration)
@@ -63,6 +74,8 @@ final class AudioCaptureService: NSObject, AudioCapturing {
 
         stopTask?.cancel()
         stopTask = nil
+        meterTimer?.invalidate()
+        meterTimer = nil
 
         recorder.stop()
         self.recorder = nil
@@ -86,6 +99,8 @@ final class AudioCaptureService: NSObject, AudioCapturing {
     func cancelRecording() {
         stopTask?.cancel()
         stopTask = nil
+        meterTimer?.invalidate()
+        meterTimer = nil
         recorder?.stop()
         DiagnosticTrace.write("AudioCaptureService cancelled recording.")
         recorder = nil
