@@ -40,7 +40,14 @@ enum RewritePromptBuilder {
     }
 
     static func sanitizeModelOutput(_ output: String) -> String {
-        output
+        // Strip Qwen3-style chain-of-thought blocks (<think>…</think>) before
+        // extracting the final answer. Qwen2.5 never emits these.
+        let withoutThinking = output.replacingOccurrences(
+            of: "<think>[\\s\\S]*?</think>\\s*",
+            with: "",
+            options: .regularExpression
+        )
+        return withoutThinking
             .replacingOccurrences(of: "^```(?:\\w+)?\\n?", with: "", options: .regularExpression)
             .replacingOccurrences(of: "\\n?```$", with: "", options: .regularExpression)
             .collapsingWhitespace()
