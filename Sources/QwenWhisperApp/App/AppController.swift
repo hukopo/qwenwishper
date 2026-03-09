@@ -125,7 +125,6 @@ final class AppController: ObservableObject {
         NSApp.setActivationPolicy(.accessory)
         installHotkey()
         syncLaunchAtLogin()
-        migrateUnsupportedQwenModel()
         populateDefaultPromptIfNeeded()
         promptForLaunchAtLoginIfNeeded()
         refreshStorageSnapshot()
@@ -244,20 +243,6 @@ final class AppController: ObservableObject {
             }
             refreshStorageSnapshot()
         }
-    }
-
-    /// Resets the Qwen model ID to the catalog default when the saved ID uses an
-    /// architecture that MLXLLM does not support (e.g. "qwen3_5" from an old catalog).
-    private func migrateUnsupportedQwenModel() {
-        let unsupportedPrefixes = ["mlx-community/Qwen3.5"]
-        let needsMigration = unsupportedPrefixes.contains(where: { settings.qwenModelID.hasPrefix($0) })
-        guard needsMigration else { return }
-        record(
-            "Migrating unsupported Qwen model '\(settings.qwenModelID)' → '\(ModelCatalog.defaultQwenModelID)'.",
-            level: .warning
-        )
-        settings.qwenModelID = ModelCatalog.defaultQwenModelID
-        saveSettings()
     }
 
     private func populateDefaultPromptIfNeeded() {

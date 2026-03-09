@@ -15,11 +15,8 @@ struct ModelPreset: Identifiable, Equatable {
 
 enum ModelCatalog {
     static let defaultWhisperModelID = "small"
-    // Qwen2.5-Instruct uses model_type "qwen2" — supported by MLXLLM 2.30+.
-    // Qwen3.5 (model_type "qwen3_5") is NOT registered in MLXLLM and throws
-    // "Unsupported model type: qwen3_5" on every call, preventing the container
-    // from ever being cached and causing a full 13-second reload on every recording.
-    static let defaultQwenModelID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+    // Qwen3.5 uses model_type "qwen3_5" supported in mlx-swift-lm main branch.
+    static let defaultQwenModelID = "mlx-community/Qwen3.5-2B-4bit"
 
     static let whisperPresets: [ModelPreset] = [
         ModelPreset(
@@ -49,30 +46,31 @@ enum ModelCatalog {
     ]
 
     static let qwenPresets: [ModelPreset] = [
-        // Qwen2.5 — model_type "qwen2", fully supported by current MLXLLM, no thinking mode.
+        // Qwen3.5 — model_type "qwen3_5", supported via mlx-swift-lm main branch.
+        // Qwen3.5 is a thinking-capable model; <think> blocks are stripped automatically.
         ModelPreset(
             kind: .qwen,
-            title: "Qwen2.5 0.5B (Fast)",
-            modelID: "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
-            description: "Smallest and fastest. Acceptable editing quality.",
-            recommendedFor: "Quick edits, low-latency dictation",
-            estimatedSizeLabel: "~400 MB"
+            title: "Qwen3.5 0.8B (Fast)",
+            modelID: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+            description: "Fastest rewrite, good quality for short dictations.",
+            recommendedFor: "Low-latency everyday dictation",
+            estimatedSizeLabel: "~450 MB"
         ),
         ModelPreset(
             kind: .qwen,
-            title: "Qwen2.5 1.5B (Recommended)",
-            modelID: "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+            title: "Qwen3.5 2B (Recommended)",
+            modelID: "mlx-community/Qwen3.5-2B-4bit",
             description: "Best balance of speed and editing quality.",
-            recommendedFor: "Everyday Russian dictation",
-            estimatedSizeLabel: "~1 GB"
+            recommendedFor: "Everyday post-editing of Russian dictation",
+            estimatedSizeLabel: "~1.2 GB"
         ),
         ModelPreset(
             kind: .qwen,
-            title: "Qwen2.5 3B",
-            modelID: "mlx-community/Qwen2.5-3B-Instruct-4bit",
-            description: "Higher quality rewrites. More RAM and slightly slower.",
-            recommendedFor: "Best quality when latency is not critical",
-            estimatedSizeLabel: "~1.9 GB"
+            title: "Qwen3.5 4B",
+            modelID: "mlx-community/Qwen3.5-4B-4bit",
+            description: "Best editing quality. Higher RAM and latency.",
+            recommendedFor: "Best quality when speed is not critical",
+            estimatedSizeLabel: "~2.3 GB"
         ),
     ]
 }
