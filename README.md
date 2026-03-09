@@ -26,6 +26,21 @@ QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into 
 
 ## Installation
 
+### Option A — Homebrew (recommended)
+
+```bash
+brew install --cask hukopo/tap/qwenwhisper
+```
+
+Homebrew handles the quarantine attribute automatically — no "damaged app" dialogs.
+
+To update later:
+```bash
+brew upgrade --cask qwenwhisper
+```
+
+### Option B — DMG
+
 1. Go to [**Releases**](https://github.com/hukopo/qwenwishper/releases/latest) and download `QwenWhisper-<version>-macos-arm64.dmg`
 2. Open the DMG
 3. Double-click **"Install QwenWhisper.command"** — Terminal opens, the app is copied to `/Applications` and the quarantine attribute is removed automatically
