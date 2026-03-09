@@ -21,7 +21,7 @@ actor MLXTextRewriter: TextRewriter {
     func rewrite(inputText: String, locale: Locale, mode: RewriteMode) async throws -> RewriteResultPayload {
         let settings = settingsProvider()
         let modelContainer = try await modelManager.prepareQwen(settings: settings, progress: progress)
-        return try await rewriteTextOnCPU(
+        return try await rewriteText(
             modelContainer: modelContainer,
             inputText: inputText,
             locale: locale,

@@ -318,7 +318,7 @@ actor ModelManager: ModelRuntimeManaging {
             if alreadyCached { return { _ in } }
             return { fraction in progress(.downloading(fraction)) }
         }
-        let loaded = try await loadQwenContainerOnCPU(
+        let loaded = try await loadQwenContainer(
             rootURL: rootURL,
             modelID: modelID,
             downloadProgress: makeDownloadProgressCallback(),
