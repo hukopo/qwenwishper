@@ -113,10 +113,17 @@ private struct ModelStatusRow: View {
                         .controlSize(.mini)
                 }
             }
-            if case .downloading(let fraction) = state, fraction > 0 {
-                ProgressView(value: fraction)
+            if case .downloading(let fraction) = state {
+                ProgressView(value: fraction > 0 ? fraction : nil)
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 200)
+                if label == "Qwen" {
+                    Text("Первая загрузка — модель скачивается (~0.5–2 GB). В следующий раз будет быстро.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 200, alignment: .leading)
+                }
             } else if state == .loading || state == .processing {
                 ProgressView()
                     .progressViewStyle(.linear)

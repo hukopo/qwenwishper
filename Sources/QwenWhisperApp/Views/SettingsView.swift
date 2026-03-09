@@ -65,8 +65,10 @@ private struct GeneralTab: View {
                 in: 5...120
             )
 
-            Button("Prompt Accessibility") {
-                controller.refreshPermissions(promptForAccessibility: true)
+            AccessibilityPermissionRow(controller: controller)
+
+            Button("Request Documents Access") {
+                controller.openDocumentsPrivacySettings()
             }
         }
         .padding(16)
@@ -82,6 +84,47 @@ private struct GeneralTab: View {
                 controller.saveSettings()
             }
         )
+    }
+}
+
+// MARK: - Accessibility Permission Row
+
+private struct AccessibilityPermissionRow: View {
+    @ObservedObject var controller: AppController
+    @State private var showInfo = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button("Request Accessibility") {
+                controller.refreshPermissions(promptForAccessibility: true)
+            }
+            Button {
+                showInfo.toggle()
+            } label: {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showInfo, arrowEdge: .trailing) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("После обновления или переустановки", systemImage: "exclamationmark.triangle")
+                        .font(.headline)
+                    Text("macOS не переносит разрешение «Универсальный доступ» автоматически при обновлении или переустановке приложения.")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Как исправить:")
+                        .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("1. Откройте Системные настройки → Конфиденциальность → Универсальный доступ")
+                        Text("2. Найдите QwenWhisper и удалите его (–)")
+                        Text("3. Нажмите «Request Accessibility» снова — разрешение будет запрошено заново")
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(width: 340)
+            }
+        }
     }
 }
 
@@ -249,8 +292,13 @@ private struct StorageRow: View {
 private struct PromptTab: View {
     @ObservedObject var controller: AppController
 
+    // Local draft avoids re-rendering TextEditor on every keystroke
+    // (binding directly to @Published causes character-by-character re-focus loss).
+    @State private var draftPrompt: String = ""
+    @State private var saveTask: Task<Void, Never>? = nil
+
     private var isDefault: Bool {
-        controller.settings.qwenSystemPrompt == RewritePromptBuilder.defaultSystemPrompt
+        draftPrompt == RewritePromptBuilder.defaultSystemPrompt
     }
 
     var body: some View {
@@ -263,28 +311,51 @@ private struct PromptTab: View {
                     .foregroundStyle(.secondary)
             }
 
-            TextEditor(text: Binding(
-                get: { controller.settings.qwenSystemPrompt },
-                set: { controller.settings.qwenSystemPrompt = $0; controller.saveSettings() }
-            ))
-            .font(.system(.body, design: .monospaced))
-            .frame(minHeight: 200)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-            )
+            TextEditor(text: $draftPrompt)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 200)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
 
             HStack {
-                Text("\(controller.settings.qwenSystemPrompt.count) символов\(isDefault ? " · по умолчанию" : "")")
+                Text("\(draftPrompt.count) символов\(isDefault ? " · по умолчанию" : "")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Сбросить") {
-                    controller.resetQwenPrompt()
+                    draftPrompt = RewritePromptBuilder.defaultSystemPrompt
+                    scheduleSave()
                 }
                 .disabled(isDefault)
             }
         }
         .padding(16)
+        .onAppear {
+            draftPrompt = controller.settings.qwenSystemPrompt
+        }
+        .onChange(of: draftPrompt) { _, _ in
+            scheduleSave()
+        }
+        .onDisappear {
+            flushSave()
+        }
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            flushSave()
+        }
+    }
+
+    private func flushSave() {
+        saveTask?.cancel()
+        saveTask = nil
+        controller.settings.qwenSystemPrompt = draftPrompt
+        controller.saveSettings()
     }
 }

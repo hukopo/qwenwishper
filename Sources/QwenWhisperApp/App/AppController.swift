@@ -176,6 +176,12 @@ final class AppController: ObservableObject {
         }
     }
 
+    func openDocumentsPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func clearModels() {
         Task {
             do {
