@@ -1,191 +1,281 @@
 # QwenWhisper
 
-QwenWhisper is a native macOS menu bar app for Russian диктовка:
+> Push-to-talk dictation for macOS — transcribed locally with Whisper, cleaned up with Qwen 3.5.
 
-- press a global hotkey
-- speak
-- get local speech-to-text with Whisper
-- optionally clean the text with a small local Qwen model
-- paste the result into the active app
+QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into any app using a global hotkey. Audio is processed entirely **on-device** with Apple Silicon: no cloud, no subscription, no data leaving your Mac.
 
-Everything is designed around a local, Apple Silicon-first workflow.
+**Pipeline:**
+1. Press hotkey → start recording
+2. Press hotkey again → stop recording
+3. [Whisper] transcribes audio locally
+4. [Qwen 3.5] rewrites and cleans up the transcript
+5. Result is pasted into the active text field automatically
 
-## What It Does
-
-QwenWhisper is built for one concrete job: fast push-to-talk dictation into any macOS text field.
-
-The pipeline is:
-
-1. Record microphone audio.
-2. Transcribe it locally with Whisper.
-3. Rewrite the transcript locally with Qwen.
-4. Paste the final text into the currently focused app.
-
-The app also exposes diagnostics so you can inspect:
-
-- the raw text after Whisper
-- the rewritten text after Qwen
-- recent logs for each pipeline step
-
-## Current Status
-
-This project is usable, but `v0.0.1` should be treated as an early preview release.
-
-What already works:
-
-- menu bar app shell
-- global push-to-talk flow
-- local Whisper transcription
-- diagnostics and copyable logs
-- showing text after Whisper and after Qwen/fallback
-- automatic paste into the active field
-
-Current limitation:
-
-- when the app is built only with Command Line Tools / `swift run`, MLX may not have the Metal runtime it expects
-- in that environment, Qwen rewrite is disabled automatically and the app falls back to Whisper output instead of crashing
-- to ship a full Whisper + Qwen build cleanly, the next step is a proper Xcode `.app` build with MLX Metal resources
+---
 
 ## Requirements
 
-- macOS 14 or newer
+| Requirement | Details |
+|-------------|---------|
+| **Mac** | Apple Silicon (M1 or newer) |
+| **macOS** | 14 Sonoma or newer |
+| **RAM** | 4 GB minimum; 8 GB recommended for Qwen 3.5 2B |
+| **Storage** | ~1–3 GB for models (downloaded on first use) |
+
+---
+
+## Installation
+
+1. Go to [**Releases**](https://github.com/hukopo/qwenwishper/releases/latest) and download `QwenWhisper-<version>-macos-arm64.dmg`
+2. Open the DMG and drag `QwenWhisper.app` into **Applications**
+3. Launch `QwenWhisper` from Applications
+
+> **Gatekeeper warning?** The app is unsigned. Right-click → **Open** → **Open** to bypass the warning. Alternatively: **System Settings → Privacy & Security → Open Anyway**.
+
+---
+
+## Permissions
+
+QwenWhisper needs three permissions to work. All processing stays local.
+
+### 1. Microphone
+
+Required to record your voice. macOS will prompt automatically on first recording.
+
+### 2. Accessibility (Universal Access)
+
+Required to paste text into the active app. macOS prompts on first launch.
+
+Open **Settings → General → Request Accessibility** to prompt again.
+
+> ⚠️ **After updating or reinstalling the app**, macOS invalidates the Accessibility permission and the app loses the ability to paste.
+>
+> **Fix:** Open **System Settings → Privacy & Security → Accessibility**, remove QwenWhisper from the list, then click **Request Accessibility** in the app settings again.
+
+### 3. Files & Folders (Documents Access)
+
+Required for model storage access. macOS may prompt automatically.
+
+Open **Settings → General → Request Documents Access** to open the relevant Privacy pane.
+
+---
+
+## First Launch
+
+On first launch the app will:
+
+- Appear as an icon in the **menu bar**
+- Ask whether to **launch at login** (recommended)
+- Request **Microphone** access
+- Request **Accessibility** access
+
+When you first use a model, it is downloaded automatically:
+
+| Model | Size | First-use download |
+|-------|------|--------------------|
+| Whisper Small | ~240 MB | Yes, once |
+| Qwen 3.5 0.8B | ~450 MB | Yes, once |
+| Qwen 3.5 2B | ~1.2 GB | Yes, once |
+
+> **Slow the first time?** Qwen downloads the model on first use. Subsequent launches load from local cache in a few seconds.
+
+---
+
+## Usage
+
+| Action | How |
+|--------|-----|
+| Start recording | Press **⌘⇧Space** (default hotkey) |
+| Stop recording | Press hotkey again |
+| View transcription | Click the menu bar icon → **Texts** section |
+| Copy last result | Click the copy button in the Texts section |
+| Open Settings | Click menu bar icon → **Settings** |
+
+The menu bar popover shows:
+
+- **After Whisper** — raw transcription
+- **After Qwen** — cleaned-up final text (when Qwen is enabled)
+- **Model status** — Whisper and Qwen load states
+- **Recent logs** — last pipeline steps
+
+---
+
+## Settings
+
+Open **Settings** from the menu bar popover.
+
+### General
+
+| Setting | Description |
+|---------|-------------|
+| **Hotkey** | Global push-to-talk key combination |
+| **Launch at login** | Start QwenWhisper automatically with macOS |
+| **Enable Qwen rewriting** | Toggle Qwen post-processing; disable for Whisper-only mode |
+| **Enable logging** | Write detailed logs for debugging |
+| **Paste delay** | Delay (ms) before pasting — increase if the target app misses the paste |
+| **Max recording** | Maximum recording duration in seconds |
+
+### Models & Storage
+
+Choose Whisper and Qwen model sizes. Larger models are slower but more accurate.
+
+| Whisper | Size | Best for |
+|---------|------|----------|
+| Base | ~75 MB | Low-latency, quiet conditions |
+| **Small** *(default)* | ~240 MB | Everyday dictation |
+| Medium | ~750 MB | Maximum accuracy |
+
+| Qwen | Size | Best for |
+|------|------|----------|
+| Qwen 3.5 0.8B | ~450 MB | Fast rewriting |
+| **Qwen 3.5 2B** *(default)* | ~1.2 GB | Best balance |
+| Qwen 3.5 4B | ~2.3 GB | Highest quality |
+
+### Prompt
+
+Customize the system prompt that Qwen receives before rewriting. The default prompt is tuned for Russian dictation post-editing. Changes are saved automatically.
+
+---
+
+## Troubleshooting
+
+### "The app cannot be opened because the developer cannot be verified"
+
+This is Gatekeeper blocking an unsigned app.
+
+**Fix:**
+1. Move `QwenWhisper.app` to **Applications**
+2. Right-click the app → **Open**
+3. Click **Open** in the dialog
+
+Or: **System Settings → Privacy & Security → Open Anyway**
+
+---
+
+### App can't paste text / Accessibility missing
+
+**Fix:**
+1. Open **System Settings → Privacy & Security → Accessibility**
+2. If QwenWhisper is listed — remove it with **–**
+3. In the app: **Settings → General → Request Accessibility**
+4. Approve the system dialog
+
+> This is always required after an app update or reinstall.
+
+---
+
+### Qwen is slow the first time
+
+The model is downloaded (~0.5–1.2 GB) on first use. This is a one-time step. Subsequent loads take a few seconds from local cache.
+
+If Qwen still reloads slowly on every recording, check the **Diagnostics** window for errors.
+
+---
+
+### "No text was transcribed"
+
+- Check that **Microphone** permission is granted
+- Check the **After Whisper** field in the menu bar popover
+- Look at **Recent Logs** — it shows per-step timing and error messages
+- Make sure you recorded for at least 0.5 seconds
+
+---
+
+### Files & Folders permission dialog keeps appearing
+
+Open **Settings → General → Request Documents Access** to navigate directly to the relevant Privacy pane and grant access permanently.
+
+---
+
+## Building from Source
+
+### Requirements
+
+- macOS 14+
+- Xcode 16+ **or** Swift 6 toolchain
 - Apple Silicon Mac
-- microphone permission
-- Accessibility permission for paste injection
 
-## Default Behavior
-
-- Hotkey: `Command + Shift + Space`
-- Whisper model: `base`
-- Qwen model: `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`
-- Language: Russian-first
-- Rewrite style: conservative post-editing of ASR text
-
-## How To Use
-
-1. Launch QwenWhisper.
-2. Grant Microphone and Accessibility access on first run.
-3. Focus any text field in any app.
-4. Press the hotkey once to start recording.
-5. Speak.
-6. Press the hotkey again to stop.
-7. Wait for transcription and paste.
-
-In the menu bar popover you can inspect:
-
-- `After Whisper`
-- `After Qwen`
-- recent logs
-
-All of these text blocks are selectable and copyable from the UI.
-
-## Model and Cache Locations
-
-QwenWhisper stores runtime data in your user cache directory:
-
-- models: `~/Library/Caches/QwenWhisper/Models`
-- recordings: `~/Library/Caches/QwenWhisper/Recordings`
-- logs: `~/Library/Caches/QwenWhisper/app.log`
-
-## Development
-
-Build:
+### Clone and Build
 
 ```bash
-swift build
+git clone https://github.com/hukopo/qwenwishper.git
+cd qwenwishper
+swift build -c release --target QwenWhisperApp
 ```
 
-Run:
+### Run in Development
 
 ```bash
 swift run QwenWhisperApp
 ```
 
-Tests:
+### Tests
 
 ```bash
-swift build --build-tests
+swift test
 ```
 
-## Install From GitHub
-
-Download the latest macOS build from Releases:
-
-- `.dmg`: recommended install path
-- `.zip`: alternative raw bundle download
-
-Current release page:
-
-- [v0.0.1](https://github.com/hukopo/qwenwishper/releases/tag/v0.0.1)
-
-Install steps:
-
-1. Download `QwenWhisper-<version>-macos-arm64.dmg`.
-2. Open the DMG.
-3. Drag `QwenWhisper.app` into `Applications`.
-4. Open `Applications` and launch `QwenWhisper.app`.
-5. If macOS warns that the app cannot be opened because the developer cannot be verified, use one of these paths:
-6. `Right Click -> Open -> Open`
-7. or `System Settings -> Privacy & Security -> Open Anyway`
-8. After the app starts, grant Microphone permission.
-9. Grant Accessibility permission so the app can paste text into the active field.
-
-What to expect on first launch:
-
-- the app appears in the macOS menu bar
-- it may ask whether it should launch at login
-- it will request microphone access
-- it will need Accessibility access for automatic paste
-
-Unsigned build notes:
-
-- current GitHub releases are not code signed or notarized
-- macOS Gatekeeper may block the first launch until you explicitly allow it
-- once approved, the app should open normally on later launches
-
-## Release Packaging
-
-To produce a local `.app` bundle and distributable archives:
+### Build a Release DMG
 
 ```bash
-./scripts/package_release.sh 0.0.1
+./scripts/package_release.sh 0.2.2
 ```
 
-This creates:
+Produces:
 
-- `dist/QwenWhisper.app`
-- `dist/QwenWhisper-0.0.1-macos-arm64.zip`
-- `dist/QwenWhisper-0.0.1-macos-arm64.dmg`
+```
+dist/
+  QwenWhisper.app
+  QwenWhisper-0.2.2-macos-arm64.zip
+  QwenWhisper-0.2.2-macos-arm64.dmg
+```
 
-For signing and notarization, see [docs/releasing.md](docs/releasing.md).
+For signed and notarized releases, see [docs/releasing.md](docs/releasing.md).
 
-## Troubleshooting
+---
 
-### “macOS says the app cannot be opened”
+## Project Structure
 
-Try this:
+```
+Sources/
+  QwenWhisperApp/        # Main SwiftUI app
+    App/                 # AppController, entry point
+    Models/              # AppSettings, ModelCatalog
+    Services/            # Whisper, Qwen, audio, paste
+    Views/               # SwiftUI views
+  WhisperBridge/         # WhisperKit wrapper
+  WhisperProbe/          # CLI diagnostic tool
+scripts/
+  package_release.sh     # Build + package DMG
+  notarize_release.sh    # Notarization helper
+docs/
+  releasing.md           # Release process guide
+```
 
-1. Move the app into `Applications`.
-2. Right-click the app and choose `Open`.
-3. If that still fails, go to `System Settings -> Privacy & Security`.
-4. Find the warning about `QwenWhisper.app`.
-5. Click `Open Anyway`.
+---
 
-### “No speech was detected”
+## Dependencies
 
-Check:
+| Package | Purpose |
+|---------|---------|
+| [WhisperKit](https://github.com/argmaxinc/WhisperKit) | On-device speech recognition |
+| [mlx-swift](https://github.com/ml-explore/mlx-swift) | Apple Silicon ML framework |
+| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | LLM inference (Qwen 3.5 support) |
+| [swift-transformers](https://github.com/huggingface/swift-transformers) | HuggingFace Hub model download |
 
-- microphone permission is granted
-- the menu bar app is actually recording
-- the `After Whisper` field updates
-- `~/Library/Caches/QwenWhisper/app.log` contains the latest run
+---
 
-### Qwen rewrite is unavailable
+## Contributing
 
-If the `Qwen` model shows failed or the logs mention missing MLX Metal shaders, the app is running in a Whisper-only fallback mode. That is expected for the current Command Line Tools-based environment.
+Pull requests are welcome. For larger changes, please open an issue first to discuss the approach.
 
-## Notes
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Push and open a Pull Request
 
-- `swift test` in this environment still requires a full Xcode installation. With Command Line Tools only, test targets build, but the runner cannot start correctly.
-- launch-at-login is most reliable from a proper `.app` bundle.
-- signed and notarized release automation is prepared in `.github/workflows/release.yml`, but real notarized releases still require your Apple Developer signing credentials in GitHub repository secrets.
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
