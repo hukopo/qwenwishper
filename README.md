@@ -112,6 +112,8 @@ When you first use a model, it is downloaded automatically:
 | Copy last result | Click the copy button in the Texts section |
 | Open Settings | Click menu bar icon → **Settings** |
 
+You can change the global hotkey to any supported key combination in **Settings → General**.
+
 The menu bar popover shows:
 
 - **After Whisper** — raw transcription
@@ -129,7 +131,7 @@ Open **Settings** from the menu bar popover.
 
 | Setting | Description |
 |---------|-------------|
-| **Hotkey** | Global push-to-talk key combination |
+| **Hotkey** | Assign any global push-to-talk key combination |
 | **Launch at login** | Start QwenWhisper automatically with macOS |
 | **Enable Qwen rewriting** | Toggle Qwen post-processing; disable for Whisper-only mode |
 | **Enable logging** | Write detailed logs for debugging |
@@ -154,7 +156,7 @@ Choose Whisper and Qwen model sizes. Larger models are slower but more accurate.
 
 ### Prompt
 
-Customize the system prompt that Qwen receives before rewriting. The default prompt is tuned for Russian dictation post-editing. Changes are saved automatically.
+Manage multiple Qwen prompt presets, switch the active preset from a picker, and preview the rewrite result on sample text before dictating. The default preset is tuned for Russian dictation post-editing, and all changes are saved automatically.
 
 ---
 

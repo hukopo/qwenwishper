@@ -14,10 +14,17 @@ func sanitizeRemovesCodeFencesAndWhitespace() {
 }
 
 @Test
-func systemPromptPreservesMeaningConstraint() {
+func russianSystemPromptPreservesMeaningConstraint() {
     let prompt = RewritePromptBuilder.systemPrompt(mode: .aggressive, locale: Locale(identifier: "ru_RU"))
+    #expect(prompt.contains("Сохраняй исходный смысл"))
+    #expect(prompt.contains("Не добавляй новые факты"))
+}
+
+@Test
+func fallbackSystemPromptPreservesMeaningConstraint() {
+    let prompt = RewritePromptBuilder.systemPrompt(mode: .aggressive, locale: Locale(identifier: "en_US"))
     #expect(prompt.contains("Preserve meaning"))
-    #expect(prompt.contains("never invent new facts"))
+    #expect(prompt.contains("Do not summarize"))
 }
 
 @Test
@@ -45,9 +52,47 @@ func settingsStoreRoundTripsSettings() throws {
 }
 
 @Test
-func presetReadableNameMatchesPresetTitle() {
+func readableNameMatchesKeyboardShortcutDescription() {
     let descriptor = HotkeyDescriptor.Preset.commandShiftSpace.descriptor
-    #expect(descriptor.readableName == HotkeyDescriptor.Preset.commandShiftSpace.title)
+    #expect(descriptor.readableName == descriptor.keyboardShortcut.description)
+}
+
+@Test
+func settingsStoreMigratesLegacyPromptIntoEditorPreset() throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    let store = SettingsStore(defaults: defaults)
+
+    let legacyPrompt = "Сделай текст вежливее, но не меняй смысл."
+    let defaultsData = try JSONEncoder().encode(AppSettings.defaults)
+    var payload = try #require(JSONSerialization.jsonObject(with: defaultsData) as? [String: Any])
+    payload.removeValue(forKey: "promptPresets")
+    payload.removeValue(forKey: "selectedPresetID")
+    payload["qwenSystemPrompt"] = legacyPrompt
+    defaults.set(try JSONSerialization.data(withJSONObject: payload), forKey: "app_settings")
+
+    let loaded = store.load()
+    let editorPreset = loaded.promptPresets.first(where: { $0.id == RewritePromptBuilder.defaultPresetID })
+
+    #expect(editorPreset?.prompt == legacyPrompt)
+    #expect(loaded.selectedPresetID == RewritePromptBuilder.defaultPresetID)
+}
+
+@Test
+func settingsStoreNormalizesMissingSelectedPreset() throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    let store = SettingsStore(defaults: defaults)
+
+    let defaultsData = try JSONEncoder().encode(AppSettings.defaults)
+    var payload = try #require(JSONSerialization.jsonObject(with: defaultsData) as? [String: Any])
+    payload["selectedPresetID"] = "missing-preset"
+    defaults.set(try JSONSerialization.data(withJSONObject: payload), forKey: "app_settings")
+
+    let loaded = store.load()
+
+    #expect(loaded.selectedPresetID == RewritePromptBuilder.defaultPresetID)
+    #expect(loaded.qwenSystemPrompt == RewritePromptBuilder.defaultSystemPrompt)
 }
 
 @MainActor
@@ -202,6 +247,7 @@ private final class MockLaunchAtLoginService: LaunchAtLoginManaging {
 }
 
 private final class MockAudioCaptureService: AudioCapturing {
+    var onAudioLevel: ((Float) -> Void)?
     private let recordingURL: URL
     private let durationSecondsValue: TimeInterval
     private(set) var startCalls = 0
@@ -253,6 +299,11 @@ private actor MockTextRewriter: TextRewriter {
         callCount += 1
         return .init(sourceText: inputText, rewrittenText: resultText, latency: .milliseconds(80))
     }
+
+    func rewriteWithPrompt(inputText: String, systemPrompt: String) async throws -> RewriteResultPayload {
+        callCount += 1
+        return .init(sourceText: inputText, rewrittenText: resultText, latency: .milliseconds(80))
+    }
 }
 
 private final class MockTextInjector: TextInjector, @unchecked Sendable {
@@ -267,4 +318,23 @@ private final class MockTextInjector: TextInjector, @unchecked Sendable {
 private actor MockModelRuntime: ModelRuntimeManaging {
     func resetAll() async throws {}
     func cachedAvailability(settings: AppSettings) async -> ModelAvailability { .init() }
+    func preloadWhisperIfCached(
+        settings: AppSettings,
+        progress: @escaping @Sendable (ModelAvailability.State) -> Void
+    ) async {}
+
+    func preloadQwenIfCached(
+        settings: AppSettings,
+        progress: @escaping @Sendable (ModelAvailability.State) -> Void
+    ) async {}
+
+    func retryWhisper(
+        settings: AppSettings,
+        progress: @escaping @Sendable (ModelAvailability.State) -> Void
+    ) async {}
+
+    func retryQwen(
+        settings: AppSettings,
+        progress: @escaping @Sendable (ModelAvailability.State) -> Void
+    ) async {}
 }

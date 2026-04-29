@@ -18,6 +18,7 @@ let package = Package(
         )
     ],
     dependencies: [
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", .upToNextMinor(from: "1.15.0")),
         .package(url: "https://github.com/argmaxinc/WhisperKit", branch: "main"),
         .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.30.6")),
         // Pinned to main-branch commit that adds qwen3_5 / Qwen35Model support.
@@ -32,6 +33,7 @@ let package = Package(
             name: "QwenWhisperApp",
             dependencies: [
                 "WhisperBridge",
+                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),

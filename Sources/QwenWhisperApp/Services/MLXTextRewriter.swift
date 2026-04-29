@@ -31,4 +31,18 @@ actor MLXTextRewriter: TextRewriter {
             DiagnosticTrace.write(message)
         }
     }
+
+    func rewriteWithPrompt(inputText: String, systemPrompt: String) async throws -> RewriteResultPayload {
+        let settings = settingsProvider()
+        let modelContainer = try await modelManager.prepareQwen(settings: settings, progress: progress)
+        return try await rewriteText(
+            modelContainer: modelContainer,
+            inputText: inputText,
+            locale: Locale(identifier: "ru"),
+            mode: .aggressive,
+            systemPromptOverride: systemPrompt
+        ) { message in
+            DiagnosticTrace.write(message)
+        }
+    }
 }

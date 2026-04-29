@@ -6,6 +6,8 @@ protocol SpeechRecognizer: Sendable {
 
 protocol TextRewriter: Sendable {
     func rewrite(inputText: String, locale: Locale, mode: RewriteMode) async throws -> RewriteResultPayload
+    /// Rewrite using an explicit system prompt (for testing presets in settings).
+    func rewriteWithPrompt(inputText: String, systemPrompt: String) async throws -> RewriteResultPayload
 }
 
 protocol TextInjector: Sendable {

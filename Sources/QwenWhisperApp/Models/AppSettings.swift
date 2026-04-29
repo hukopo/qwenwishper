@@ -1,5 +1,6 @@
 import Carbon
 import Foundation
+@preconcurrency import KeyboardShortcuts
 
 struct HotkeyDescriptor: Codable, Equatable, Sendable {
     enum Preset: String, CaseIterable, Codable, Identifiable, Sendable {
@@ -35,12 +36,27 @@ struct HotkeyDescriptor: Codable, Equatable, Sendable {
     var keyCode: UInt32
     var carbonModifiers: UInt32
 
-    var readableName: String {
-        if let preset = Preset.allCases.first(where: { $0.descriptor == self }) {
-            return preset.title
-        }
+    init(keyCode: UInt32, carbonModifiers: UInt32) {
+        self.keyCode = keyCode
+        self.carbonModifiers = carbonModifiers
+    }
 
-        return "Key code \(keyCode)"
+    init(shortcut: KeyboardShortcuts.Shortcut) {
+        self.init(
+            keyCode: UInt32(shortcut.carbonKeyCode),
+            carbonModifiers: UInt32(shortcut.carbonModifiers)
+        )
+    }
+
+    var keyboardShortcut: KeyboardShortcuts.Shortcut {
+        KeyboardShortcuts.Shortcut(
+            carbonKeyCode: Int(keyCode),
+            carbonModifiers: Int(carbonModifiers)
+        )
+    }
+
+    var readableName: String {
+        keyboardShortcut.description
     }
 }
 
@@ -55,7 +71,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         qwenModelID: ModelCatalog.defaultQwenModelID,
         qwenEnabled: true,
         loggingEnabled: true,
-        qwenSystemPrompt: ""
+        promptPresets: RewritePromptBuilder.defaultPresets,
+        selectedPresetID: RewritePromptBuilder.defaultPresetID
     )
 
     var hotkey: HotkeyDescriptor
@@ -68,7 +85,14 @@ struct AppSettings: Codable, Equatable, Sendable {
     /// When false the Qwen rewrite step is skipped entirely; Whisper text is pasted as-is.
     var qwenEnabled: Bool
     var loggingEnabled: Bool
-    var qwenSystemPrompt: String
+    var promptPresets: [PromptPreset]
+    var selectedPresetID: String
+
+    /// The active system prompt resolved from the selected preset.
+    var qwenSystemPrompt: String {
+        promptPresets.first(where: { $0.id == selectedPresetID })?.prompt
+            ?? RewritePromptBuilder.defaultSystemPrompt
+    }
 
     init(
         hotkey: HotkeyDescriptor,
@@ -80,7 +104,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         qwenModelID: String,
         qwenEnabled: Bool,
         loggingEnabled: Bool,
-        qwenSystemPrompt: String
+        promptPresets: [PromptPreset],
+        selectedPresetID: String
     ) {
         self.hotkey = hotkey
         self.launchAtLogin = launchAtLogin
@@ -91,7 +116,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         self.qwenModelID = qwenModelID
         self.qwenEnabled = qwenEnabled
         self.loggingEnabled = loggingEnabled
-        self.qwenSystemPrompt = qwenSystemPrompt
+        self.promptPresets = promptPresets
+        self.selectedPresetID = selectedPresetID
     }
 
     init(from decoder: Decoder) throws {
@@ -106,7 +132,57 @@ struct AppSettings: Codable, Equatable, Sendable {
         // Default true — old settings files without this key keep Qwen enabled.
         qwenEnabled = (try? container.decode(Bool.self, forKey: .qwenEnabled)) ?? true
         loggingEnabled = try container.decode(Bool.self, forKey: .loggingEnabled)
-        qwenSystemPrompt = (try? container.decode(String.self, forKey: .qwenSystemPrompt)) ?? ""
+
+        // Migration: old settings had a single qwenSystemPrompt string.
+        if let presets = try? container.decode([PromptPreset].self, forKey: .promptPresets),
+           !presets.isEmpty {
+            promptPresets = presets
+        } else {
+            var presets = RewritePromptBuilder.defaultPresets
+            // If the user had a custom prompt, preserve it in the editor preset.
+            if let oldPrompt = try? container.decode(String.self, forKey: .legacyQwenSystemPrompt),
+               !oldPrompt.isEmpty, oldPrompt != RewritePromptBuilder.defaultSystemPrompt {
+                if let idx = presets.firstIndex(where: { $0.id == RewritePromptBuilder.defaultPresetID }) {
+                    presets[idx].prompt = oldPrompt
+                }
+            }
+            promptPresets = presets
+        }
+        selectedPresetID = (try? container.decode(String.self, forKey: .selectedPresetID))
+            ?? RewritePromptBuilder.defaultPresetID
+        normalizePromptPresets()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case hotkey, launchAtLogin, didPromptLaunchAtLogin, pasteDelayMs, maxRecordingSeconds
+        case whisperModelID, qwenModelID, qwenEnabled, loggingEnabled
+        case promptPresets, selectedPresetID
+        case legacyQwenSystemPrompt = "qwenSystemPrompt"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(hotkey, forKey: .hotkey)
+        try container.encode(launchAtLogin, forKey: .launchAtLogin)
+        try container.encode(didPromptLaunchAtLogin, forKey: .didPromptLaunchAtLogin)
+        try container.encode(pasteDelayMs, forKey: .pasteDelayMs)
+        try container.encode(maxRecordingSeconds, forKey: .maxRecordingSeconds)
+        try container.encode(whisperModelID, forKey: .whisperModelID)
+        try container.encode(qwenModelID, forKey: .qwenModelID)
+        try container.encode(qwenEnabled, forKey: .qwenEnabled)
+        try container.encode(loggingEnabled, forKey: .loggingEnabled)
+        try container.encode(promptPresets, forKey: .promptPresets)
+        try container.encode(selectedPresetID, forKey: .selectedPresetID)
+    }
+
+    mutating func normalizePromptPresets() {
+        if promptPresets.isEmpty {
+            promptPresets = RewritePromptBuilder.defaultPresets
+        }
+
+        if !promptPresets.contains(where: { $0.id == selectedPresetID }) {
+            selectedPresetID = promptPresets.first?.id ?? RewritePromptBuilder.defaultPresetID
+        }
     }
 }
 

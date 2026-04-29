@@ -1,6 +1,54 @@
 import Foundation
 
+struct PromptPreset: Codable, Identifiable, Equatable, Sendable {
+    var id: String
+    var name: String
+    var prompt: String
+}
+
 enum RewritePromptBuilder {
+    static let defaultPresetID = "editor"
+    static let defaultExampleText = "Хай! как дела? я сегодня ягод поел, пойдешь завтра со мной?"
+
+    static let defaultPresets: [PromptPreset] = [
+        PromptPreset(
+            id: defaultPresetID,
+            name: "Редактор",
+            prompt: defaultSystemPrompt
+        ),
+        PromptPreset(
+            id: "translator",
+            name: "Переводчик",
+            prompt: """
+                Ты переводчик. Переведи текст на английский язык.
+                Сохрани исходный смысл и тон.
+                Верни только перевод без пояснений.
+                """
+        ),
+        PromptPreset(
+            id: "filler-remover",
+            name: "Без слов-паразитов",
+            prompt: """
+                Ты редактор речи. Убери из текста все слова-паразиты: типа, типо, ну, как бы, вот, это, а, м, эм, ээ, \
+                короче, значит, то есть, в общем, ладно, слушай, блин, чё, так сказать.
+                Исправь грамматику и пунктуацию.
+                Сделай предложения чёткими и внятными.
+                Верни только итоговый текст без пояснений.
+                """
+        ),
+        PromptPreset(
+            id: "playful",
+            name: "Игривый",
+            prompt: """
+                Ты игривый и кокетливый редактор. Перепиши текст, щедро добавив в него флирт, \
+                соблазнение и заигрывание. Сделай каждое предложение завлекающим и чарующим. \
+                Используй намёки, комплименты, интригу и лёгкую провокацию. \
+                Сохрани исходный смысл, но оберни его в обольщение. \
+                Верни только итоговый текст без пояснений.
+                """
+        ),
+    ]
+
     static let defaultSystemPrompt: String = """
         Ты редактор русской диктовки после ASR.
         Превращай сырой транскрипт в аккуратный письменный русский текст.
@@ -51,5 +99,9 @@ enum RewritePromptBuilder {
             .replacingOccurrences(of: "^```(?:\\w+)?\\n?", with: "", options: .regularExpression)
             .replacingOccurrences(of: "\\n?```$", with: "", options: .regularExpression)
             .collapsingWhitespace()
+    }
+
+    static func defaultPreset(for id: String) -> PromptPreset? {
+        defaultPresets.first(where: { $0.id == id })
     }
 }

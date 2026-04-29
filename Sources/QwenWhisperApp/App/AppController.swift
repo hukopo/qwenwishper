@@ -226,9 +226,16 @@ final class AppController: ObservableObject {
         StorageService.revealAppInFinder()
     }
 
-    func resetQwenPrompt() {
-        settings.qwenSystemPrompt = RewritePromptBuilder.defaultSystemPrompt
+    func resetPromptPresets() {
+        settings.promptPresets = RewritePromptBuilder.defaultPresets
+        settings.selectedPresetID = RewritePromptBuilder.defaultPresetID
         saveSettings()
+    }
+
+    /// Run a test rewrite with an explicit system prompt (used by the Prompt settings preview).
+    func testRewrite(inputText: String, systemPrompt: String) async throws -> String {
+        let result = try await textRewriter.rewriteWithPrompt(inputText: inputText, systemPrompt: systemPrompt)
+        return result.rewrittenText
     }
 
     func retryModel(_ kind: ModelKind) {
@@ -259,8 +266,10 @@ final class AppController: ObservableObject {
     }
 
     private func populateDefaultPromptIfNeeded() {
-        guard settings.qwenSystemPrompt.isEmpty else { return }
-        settings.qwenSystemPrompt = RewritePromptBuilder.defaultSystemPrompt
+        let oldSettings = settings
+        settings.normalizePromptPresets()
+
+        guard settings != oldSettings else { return }
         saveSettings()
     }
 
