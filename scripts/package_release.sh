@@ -66,6 +66,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 # Ensure mlx.metallib is available (download from PyPI if not cached).
 if [[ ! -f "$MLX_METALLIB" ]]; then
   echo "mlx.metallib not found at $MLX_METALLIB — downloading from PyPI (one-time, ~37 MB)…"
+  mkdir -p "$(dirname "$MLX_METALLIB")"
   TMP_WHEEL="$(mktemp /tmp/mlx_metal_XXXXXX.whl)"
   curl -fsSL "$MLX_WHEEL_URL" -o "$TMP_WHEEL"
   unzip -p "$TMP_WHEEL" "mlx/lib/mlx.metallib" > "$MLX_METALLIB"
