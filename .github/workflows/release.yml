@@ -27,7 +27,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          XCODE_APP="$(find /Applications -maxdepth 1 -type d -name 'Xcode_16*.app' | sort | tail -n1)"
+          if [[ -z "$XCODE_APP" ]]; then
+            echo "No Xcode 16 installation found on runner." >&2
+            ls -1 /Applications | grep '^Xcode' || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          swift --version
 
       - name: Import Developer ID certificate
         if: ${{ env.DEVELOPER_ID_APPLICATION_CERT_BASE64 != '' && env.DEVELOPER_ID_APPLICATION_CERT_PASSWORD != '' && env.BUILD_KEYCHAIN_PASSWORD != '' }}
