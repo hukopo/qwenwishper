@@ -15,6 +15,7 @@ final class AppController: ObservableObject {
         let textRewriter: TextRewriter
         let textInjector: TextInjector
         let modelRuntime: ModelRuntimeManaging
+        let liveTranslator: LiveTranslating
     }
 
     @Published var settings: AppSettings
@@ -24,9 +25,13 @@ final class AppController: ObservableObject {
     @Published var modelAvailability = ModelAvailability()
     @Published var diagnostics: [DiagnosticsEntry] = []
     @Published var microphoneAuthorized = false
+    @Published var screenCaptureAuthorized = false
     @Published var accessibilityAuthorized = false
     @Published var latestWhisperText = ""
     @Published var latestQwenText = ""
+    @Published var latestLiveTranscriptText = ""
+    @Published var latestLiveTranslationText = ""
+    @Published var liveTranslationSnapshot: LiveTranslationSnapshot?
     @Published var storageSnapshot = StorageSnapshot(
         appURL: Bundle.main.bundleURL,
         appSizeBytes: 0,
@@ -46,14 +51,18 @@ final class AppController: ObservableObject {
     private let textRewriter: TextRewriter
     private let textInjector: TextInjector
     private let modelRuntime: ModelRuntimeManaging
+    private let liveTranslator: LiveTranslating
 
     private var isProcessing = false
     private var isRecording = false
+    private var isRealtimeActive = false
     private var hasStarted = false
     private let floatingPanel = FloatingStatusPanel()
 
     var isRecordingActive: Bool { status == .recording }
-    var canToggleRecording: Bool { !isProcessing || isRecording }
+    var isLiveTranslationActive: Bool { isRealtimeActive }
+    var canToggleRecording: Bool { (!isProcessing && !isRealtimeActive) || isRecording }
+    var canToggleLiveTranslation: Bool { (!isProcessing && !isRecording) || isRealtimeActive }
     var diagnosticsText: String {
         diagnostics
             .map {
@@ -97,7 +106,8 @@ final class AppController: ObservableObject {
             speechRecognizer: speechRecognizer,
             textRewriter: textRewriter,
             textInjector: PasteService(),
-            modelRuntime: modelManager
+            modelRuntime: modelManager,
+            liveTranslator: RealtimeTranslationService(modelManager: modelManager)
         )
 
         self.init(settings: settings, dependencies: dependencies)
@@ -117,6 +127,7 @@ final class AppController: ObservableObject {
         self.textRewriter = dependencies.textRewriter
         self.textInjector = dependencies.textInjector
         self.modelRuntime = dependencies.modelRuntime
+        self.liveTranslator = dependencies.liveTranslator
 
         wireServices()
     }
@@ -133,7 +144,9 @@ final class AppController: ObservableObject {
         refreshStorageSnapshot()
         Task {
             microphoneAuthorized = await permissionManager.ensureMicrophoneAccess()
+            screenCaptureAuthorized = permissionManager.isScreenCaptureAuthorized()
             record("Microphone access: \(microphoneAuthorized).", level: .info)
+            record("Screen capture access: \(screenCaptureAuthorized).", level: .info)
         }
         promptForAccessibilityIfNeeded()
         preloadWhisperInBackground()
@@ -173,6 +186,7 @@ final class AppController: ObservableObject {
         Task {
             status = .checkingPermissions
             microphoneAuthorized = await permissionManager.ensureMicrophoneAccess()
+            screenCaptureAuthorized = promptForAccessibility ? await permissionManager.requestScreenCaptureAccess() : permissionManager.isScreenCaptureAuthorized()
             accessibilityAuthorized = permissionManager.isAccessibilityTrusted(prompt: promptForAccessibility)
             status = .idle
             record("Permissions refreshed.", level: .info)
@@ -287,6 +301,12 @@ final class AppController: ObservableObject {
         hotkeyPressed()
     }
 
+    func toggleLiveTranslationFromUI() {
+        Task {
+            await toggleLiveTranslation()
+        }
+    }
+
     func toggleRecording() async {
         do {
             if isRecording {
@@ -302,8 +322,25 @@ final class AppController: ObservableObject {
         }
     }
 
+    func toggleLiveTranslation() async {
+        do {
+            if isRealtimeActive {
+                record("Toggle requested: stop live translation.", level: .info)
+                await stopLiveTranslation()
+            } else {
+                guard !isProcessing, !isRecording else {
+                    throw AppFailure.alreadyBusy
+                }
+                record("Toggle requested: start live translation.", level: .info)
+                try await startLiveTranslation()
+            }
+        } catch {
+            handle(error)
+        }
+    }
+
     private func beginRecording() async throws {
-        guard !isProcessing else {
+        guard !isProcessing, !isRealtimeActive else {
             throw AppFailure.alreadyBusy
         }
         latestWhisperText = ""
@@ -339,6 +376,98 @@ final class AppController: ObservableObject {
         }
 
         record("Recording started.", level: .info)
+    }
+
+    private func startLiveTranslation() async throws {
+        guard !isRealtimeActive, !isProcessing, !isRecording else {
+            throw AppFailure.alreadyBusy
+        }
+
+        latestLiveTranscriptText = ""
+        latestLiveTranslationText = ""
+        liveTranslationSnapshot = nil
+
+        switch settings.liveAudioSource {
+        case .microphone:
+            let microphoneGranted = microphoneAuthorized ? true : await permissionManager.ensureMicrophoneAccess()
+            record("Realtime microphone access state: \(microphoneGranted).", level: .info)
+            guard microphoneGranted else {
+                throw AppFailure.microphoneDenied
+            }
+            microphoneAuthorized = true
+        case .systemAudio:
+            let screenGranted = screenCaptureAuthorized ? true : await permissionManager.requestScreenCaptureAccess()
+            record("Screen capture access state: \(screenGranted).", level: .info)
+            guard screenGranted else {
+                throw AppFailure.screenCaptureDenied
+            }
+            screenCaptureAuthorized = true
+        }
+
+        isRealtimeActive = true
+        status = .liveCapturing
+        audioLevel = -160
+
+        let configuration = LiveTranslationConfiguration(
+            source: settings.liveAudioSource,
+            targetLanguage: settings.liveTranslationTargetLanguage,
+            whisperModelID: settings.whisperModelID,
+            qwenModelID: settings.qwenModelID,
+            updateInterval: .milliseconds(settings.liveTranslationIntervalMs)
+        )
+
+        do {
+            try await liveTranslator.start(
+                configuration: configuration,
+                onAudioLevel: { [weak self] level in
+                    Task { @MainActor in
+                        self?.audioLevel = level
+                    }
+                },
+                onUpdate: { [weak self] update in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.latestLiveTranscriptText = update.transcriptText
+                        self.latestLiveTranslationText = update.translatedText
+                        self.liveTranslationSnapshot = .init(
+                            transcriptText: update.transcriptText,
+                            translatedText: update.translatedText,
+                            finishedAt: Date()
+                        )
+
+                        if self.settings.liveTranslationTargetLanguage.usesWhisperNativeTranslation {
+                            self.status = .liveTranscribing
+                        } else if update.translatedText != update.transcriptText {
+                            self.status = .liveTranslating
+                        } else {
+                            self.status = .liveTranscribing
+                        }
+                    }
+                }
+            )
+        } catch {
+            isRealtimeActive = false
+            status = .idle
+            throw error
+        }
+
+        record(
+            "Live translation started. source=\(settings.liveAudioSource.rawValue) target=\(settings.liveTranslationTargetLanguage.rawValue).",
+            level: .info
+        )
+    }
+
+    private func stopLiveTranslation() async {
+        guard isRealtimeActive else { return }
+        isRealtimeActive = false
+        await liveTranslator.stop()
+        audioLevel = -160
+        if case .error = status {
+            // Preserve current error state.
+        } else {
+            status = .idle
+        }
+        record("Live translation stopped.", level: .info)
     }
 
     private func finishRecordingAndProcess() async throws {

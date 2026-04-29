@@ -1,5 +1,19 @@
 import Foundation
 
+struct LiveTranslationConfiguration: Sendable, Equatable {
+    var source: AudioInputSource
+    var targetLanguage: TranslationTargetLanguage
+    var whisperModelID: String
+    var qwenModelID: String
+    var updateInterval: Duration
+}
+
+struct LiveTranslationUpdate: Sendable, Equatable {
+    var transcriptText: String
+    var translatedText: String
+    var isFinal: Bool
+}
+
 protocol SpeechRecognizer: Sendable {
     func transcribe(audioURL: URL) async throws -> TranscriptionResultPayload
 }
@@ -23,6 +37,8 @@ protocol AudioCapturing: AnyObject {
 
 protocol PermissionManaging: AnyObject, Sendable {
     func ensureMicrophoneAccess() async -> Bool
+    func isScreenCaptureAuthorized() -> Bool
+    func requestScreenCaptureAccess() async -> Bool
     func isAccessibilityTrusted(prompt: Bool) -> Bool
 }
 
@@ -50,4 +66,14 @@ protocol ModelRuntimeManaging: Sendable {
     func retryWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
     /// Clears any corrupted Qwen state and re-downloads + loads the model.
     func retryQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
+}
+
+protocol LiveTranslating: Sendable {
+    func start(
+        configuration: LiveTranslationConfiguration,
+        onAudioLevel: @escaping @Sendable (Float) -> Void,
+        onUpdate: @escaping @Sendable (LiveTranslationUpdate) -> Void
+    ) async throws
+
+    func stop() async
 }

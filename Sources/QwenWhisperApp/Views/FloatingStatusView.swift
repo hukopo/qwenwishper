@@ -19,8 +19,8 @@ struct FloatingStatusView: View {
             .scaleEffect(x: 1, y: state.isVisible ? 1 : 0.01, anchor: .center)
             .opacity(state.isVisible ? 1 : 0)
             .animation(.spring(duration: 0.2, bounce: 0.1), value: state.isVisible)
-            .task(id: controller.status == .recording) {
-                guard controller.status == .recording else { return }
+            .task(id: controller.status == .recording || controller.status == .liveCapturing) {
+                guard controller.status == .recording || controller.status == .liveCapturing else { return }
                 while !Task.isCancelled {
                     let rawLevel = controller.audioLevel
                     let normalized = Float(max(0, min(1, Double((rawLevel + 50) / 50))))
@@ -67,7 +67,7 @@ struct FloatingStatusView: View {
     @ViewBuilder
     private var pipelineContent: some View {
         switch controller.status {
-        case .recording:
+        case .recording, .liveCapturing:
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(0 ..< 5, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 1.5)
@@ -77,12 +77,12 @@ struct FloatingStatusView: View {
                 }
             }
             .frame(width: 27, height: 20)
-        case .transcribing, .pasting:
+        case .transcribing, .liveTranscribing, .pasting:
             ProgressView()
                 .tint(.white)
                 .scaleEffect(0.8)
                 .frame(width: 18, height: 18)
-        case .rewriting:
+        case .rewriting, .liveTranslating:
             ProgressView()
                 .tint(.white)
                 .scaleEffect(0.8)

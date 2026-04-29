@@ -97,3 +97,55 @@ func rewriteText(
         latency: startedAt.duration(to: .now)
     )
 }
+
+func translateText(
+    modelContainer: ModelContainer,
+    inputText: String,
+    targetLanguage: TranslationTargetLanguage,
+    log: @escaping @Sendable (String) -> Void
+) async throws -> RewriteResultPayload {
+    log("MLXTextTranslator entered.")
+    let startedAt = ContinuousClock.now
+
+    let systemPrompt = """
+    You are a live interpreter.
+    Translate the user's text into \(targetLanguage.promptName).
+    Preserve meaning, tone, names, and numbers.
+    Return only the translation.
+    """
+
+    let input = UserInput(chat: [
+        .system(systemPrompt),
+        .user(inputText)
+    ])
+    log("MLXTextTranslator preparing model input. sourceLength=\(inputText.count)")
+
+    seed(UInt64(Date.timeIntervalSinceReferenceDate * 1000))
+    let lmInput = try await modelContainer.prepare(input: input)
+    let maxTokens = max(96, min(512, inputText.count * 2))
+    let stream = try await modelContainer.generate(
+        input: lmInput,
+        parameters: GenerateParameters(maxTokens: maxTokens, temperature: 0.2, topP: 0.8)
+    )
+
+    var output = ""
+    for await generation in stream {
+        switch generation {
+        case .chunk(let chunk):
+            output += chunk
+        case .info, .toolCall:
+            break
+        }
+    }
+
+    let translated = RewritePromptBuilder.sanitizeModelOutput(output)
+    guard !translated.isEmpty else {
+        throw AppFailure.translationFailed("The translation model returned an empty response.")
+    }
+
+    return RewriteResultPayload(
+        sourceText: inputText,
+        rewrittenText: translated,
+        latency: startedAt.duration(to: .now)
+    )
+}

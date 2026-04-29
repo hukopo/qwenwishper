@@ -41,15 +41,28 @@ struct MenuBarContentView: View {
                 }
             }
 
-            Button(controller.isRecordingActive ? "Stop Recording" : "Start Recording") {
-                controller.toggleRecordingFromUI()
+            VStack(alignment: .leading, spacing: 8) {
+                Button(controller.isRecordingActive ? "Stop Recording" : "Start Recording") {
+                    controller.toggleRecordingFromUI()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!controller.canToggleRecording)
+
+                Button(controller.isLiveTranslationActive ? "Stop Live Translation" : "Start Live Translation") {
+                    controller.toggleLiveTranslationFromUI()
+                }
+                .buttonStyle(.bordered)
+                .disabled(!controller.canToggleLiveTranslation)
+
+                Text("Live mode: \(controller.settings.liveAudioSource.title) -> \(controller.settings.liveTranslationTargetLanguage.title)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!controller.canToggleRecording)
 
             GroupBox("Permissions") {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(controller.microphoneAuthorized ? "Microphone granted" : "Microphone missing", systemImage: controller.microphoneAuthorized ? "checkmark.circle.fill" : "xmark.circle")
+                    Label(controller.screenCaptureAuthorized ? "Screen capture granted" : "Screen capture missing", systemImage: controller.screenCaptureAuthorized ? "checkmark.circle.fill" : "xmark.circle")
                     Label(controller.accessibilityAuthorized ? "Accessibility granted" : "Accessibility missing", systemImage: controller.accessibilityAuthorized ? "checkmark.circle.fill" : "xmark.circle")
                     Button("Refresh Permissions") {
                         controller.refreshPermissions(promptForAccessibility: true)
@@ -74,6 +87,10 @@ struct MenuBarContentView: View {
 
             GroupBox("Texts") {
                 VStack(alignment: .leading, spacing: 10) {
+                    if !controller.latestLiveTranscriptText.isEmpty || !controller.latestLiveTranslationText.isEmpty {
+                        CopyableTextSection(title: "Live Transcript", text: controller.latestLiveTranscriptText, minHeight: 70)
+                        CopyableTextSection(title: "Live Translation", text: controller.latestLiveTranslationText, minHeight: 70)
+                    }
                     if controller.settings.qwenEnabled {
                         CopyableTextSection(title: "After Whisper", text: controller.latestWhisperText, minHeight: 70)
                         CopyableTextSection(title: "After Qwen", text: controller.latestQwenText, minHeight: 70)

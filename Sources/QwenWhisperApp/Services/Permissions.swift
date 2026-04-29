@@ -20,6 +20,17 @@ final class PermissionManager: PermissionManaging, @unchecked Sendable {
         }
     }
 
+    func isScreenCaptureAuthorized() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    func requestScreenCaptureAccess() async -> Bool {
+        if isScreenCaptureAuthorized() {
+            return true
+        }
+        return CGRequestScreenCaptureAccess()
+    }
+
     func isAccessibilityTrusted(prompt: Bool) -> Bool {
         let options = ["AXTrustedCheckOptionPrompt": prompt] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)

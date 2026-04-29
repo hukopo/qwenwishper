@@ -67,6 +67,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         didPromptLaunchAtLogin: false,
         pasteDelayMs: 120,
         maxRecordingSeconds: 30,
+        liveAudioSource: .microphone,
+        liveTranslationTargetLanguage: .english,
+        liveTranslationIntervalMs: 1_200,
         whisperModelID: ModelCatalog.defaultWhisperModelID,
         qwenModelID: ModelCatalog.defaultQwenModelID,
         qwenEnabled: true,
@@ -80,6 +83,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var didPromptLaunchAtLogin: Bool
     var pasteDelayMs: Int
     var maxRecordingSeconds: Int
+    var liveAudioSource: AudioInputSource
+    var liveTranslationTargetLanguage: TranslationTargetLanguage
+    var liveTranslationIntervalMs: Int
     var whisperModelID: String
     var qwenModelID: String
     /// When false the Qwen rewrite step is skipped entirely; Whisper text is pasted as-is.
@@ -100,6 +106,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         didPromptLaunchAtLogin: Bool,
         pasteDelayMs: Int,
         maxRecordingSeconds: Int,
+        liveAudioSource: AudioInputSource,
+        liveTranslationTargetLanguage: TranslationTargetLanguage,
+        liveTranslationIntervalMs: Int,
         whisperModelID: String,
         qwenModelID: String,
         qwenEnabled: Bool,
@@ -112,6 +121,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         self.didPromptLaunchAtLogin = didPromptLaunchAtLogin
         self.pasteDelayMs = pasteDelayMs
         self.maxRecordingSeconds = maxRecordingSeconds
+        self.liveAudioSource = liveAudioSource
+        self.liveTranslationTargetLanguage = liveTranslationTargetLanguage
+        self.liveTranslationIntervalMs = liveTranslationIntervalMs
         self.whisperModelID = whisperModelID
         self.qwenModelID = qwenModelID
         self.qwenEnabled = qwenEnabled
@@ -127,6 +139,12 @@ struct AppSettings: Codable, Equatable, Sendable {
         didPromptLaunchAtLogin = try container.decode(Bool.self, forKey: .didPromptLaunchAtLogin)
         pasteDelayMs = try container.decode(Int.self, forKey: .pasteDelayMs)
         maxRecordingSeconds = try container.decode(Int.self, forKey: .maxRecordingSeconds)
+        liveAudioSource = (try? container.decode(AudioInputSource.self, forKey: .liveAudioSource)) ?? .microphone
+        liveTranslationTargetLanguage = (try? container.decode(
+            TranslationTargetLanguage.self,
+            forKey: .liveTranslationTargetLanguage
+        )) ?? .english
+        liveTranslationIntervalMs = (try? container.decode(Int.self, forKey: .liveTranslationIntervalMs)) ?? 1_200
         whisperModelID = try container.decode(String.self, forKey: .whisperModelID)
         qwenModelID = try container.decode(String.self, forKey: .qwenModelID)
         // Default true — old settings files without this key keep Qwen enabled.
@@ -155,6 +173,7 @@ struct AppSettings: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case hotkey, launchAtLogin, didPromptLaunchAtLogin, pasteDelayMs, maxRecordingSeconds
+        case liveAudioSource, liveTranslationTargetLanguage, liveTranslationIntervalMs
         case whisperModelID, qwenModelID, qwenEnabled, loggingEnabled
         case promptPresets, selectedPresetID
         case legacyQwenSystemPrompt = "qwenSystemPrompt"
@@ -167,6 +186,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         try container.encode(didPromptLaunchAtLogin, forKey: .didPromptLaunchAtLogin)
         try container.encode(pasteDelayMs, forKey: .pasteDelayMs)
         try container.encode(maxRecordingSeconds, forKey: .maxRecordingSeconds)
+        try container.encode(liveAudioSource, forKey: .liveAudioSource)
+        try container.encode(liveTranslationTargetLanguage, forKey: .liveTranslationTargetLanguage)
+        try container.encode(liveTranslationIntervalMs, forKey: .liveTranslationIntervalMs)
         try container.encode(whisperModelID, forKey: .whisperModelID)
         try container.encode(qwenModelID, forKey: .qwenModelID)
         try container.encode(qwenEnabled, forKey: .qwenEnabled)
@@ -176,6 +198,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     }
 
     mutating func normalizePromptPresets() {
+        liveTranslationIntervalMs = max(600, min(3_000, liveTranslationIntervalMs))
+
         if promptPresets.isEmpty {
             promptPresets = RewritePromptBuilder.defaultPresets
         }

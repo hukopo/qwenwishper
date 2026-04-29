@@ -79,7 +79,7 @@ final class FloatingStatusPanel {
         currentStatus = status
         guard state.resultText == nil else { return }
         switch status {
-        case .recording, .transcribing, .rewriting, .pasting, .error:
+        case .recording, .liveCapturing, .transcribing, .liveTranscribing, .rewriting, .liveTranslating, .pasting, .error:
             show()
         case .idle, .checkingPermissions, .loadingModels:
             hide()

@@ -1,15 +1,22 @@
 # QwenWhisper
 
-> Push-to-talk dictation for macOS — transcribed locally with Whisper, cleaned up with Qwen 3.5.
+> Push-to-talk dictation and live translation for macOS — transcribed locally with Whisper, post-processed with Qwen.
 
-QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into any app using a global hotkey. Audio is processed entirely **on-device** with Apple Silicon: no cloud, no subscription, no data leaving your Mac.
+QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into any app using a global hotkey and also run **live translation** from either your **microphone** or **system audio**. Audio is processed entirely **on-device** with Apple Silicon: no cloud, no subscription, no data leaving your Mac.
 
-**Pipeline:**
+**Dictation pipeline:**
 1. Press hotkey → start recording
 2. Press hotkey again → stop recording
 3. [Whisper] transcribes audio locally
-4. [Qwen 3.5] rewrites and cleans up the transcript
+4. [Qwen] rewrites and cleans up the transcript
 5. Result is pasted into the active text field automatically
+
+**Live translation pipeline:**
+1. Start **Live Translation** from the menu bar
+2. Choose **Microphone** or **System Audio** in Settings
+3. [Whisper] streams live transcription or English translation
+4. [Qwen 3] translates into the selected target language when needed
+5. Transcript and translation update in the menu bar popover in near real time
 
 ---
 
@@ -19,7 +26,7 @@ QwenWhisper is a lightweight macOS menu bar app that lets you dictate text into 
 |-------------|---------|
 | **Mac** | Apple Silicon (M1 or newer) |
 | **macOS** | 14 Sonoma or newer |
-| **RAM** | 4 GB minimum; 8 GB recommended for Qwen 3.5 2B |
+| **RAM** | 4 GB minimum; 8 GB recommended for Qwen 3 1.7B |
 | **Storage** | ~1–3 GB for models (downloaded on first use) |
 
 ---
@@ -57,13 +64,17 @@ brew upgrade --cask qwenwhisper
 
 ## Permissions
 
-QwenWhisper needs three permissions to work. All processing stays local.
+QwenWhisper needs up to four permissions depending on which features you use. All processing stays local.
 
 ### 1. Microphone
 
 Required to record your voice. macOS will prompt automatically on first recording.
 
-### 2. Accessibility (Universal Access)
+### 2. Screen Recording
+
+Required only for **System Audio** live translation. macOS prompts when you first start that mode.
+
+### 3. Accessibility (Universal Access)
 
 Required to paste text into the active app. macOS prompts on first launch.
 
@@ -73,7 +84,7 @@ Open **Settings → General → Request Accessibility** to prompt again.
 >
 > **Fix:** Open **System Settings → Privacy & Security → Accessibility**, remove QwenWhisper from the list, then click **Request Accessibility** in the app settings again.
 
-### 3. Files & Folders (Documents Access)
+### 4. Files & Folders (Documents Access)
 
 Required for model storage access. macOS may prompt automatically.
 
@@ -95,8 +106,8 @@ When you first use a model, it is downloaded automatically:
 | Model | Size | First-use download |
 |-------|------|--------------------|
 | Whisper Small | ~240 MB | Yes, once |
-| Qwen 3.5 0.8B | ~450 MB | Yes, once |
-| Qwen 3.5 2B | ~1.2 GB | Yes, once |
+| Qwen 3 0.6B | ~335 MB | Yes, once |
+| Qwen 3 1.7B | ~930 MB | Yes, once |
 
 > **Slow the first time?** Qwen downloads the model on first use. Subsequent launches load from local cache in a few seconds.
 
@@ -108,6 +119,8 @@ When you first use a model, it is downloaded automatically:
 |--------|-----|
 | Start recording | Press **⌘⇧Space** (default hotkey) |
 | Stop recording | Press hotkey again |
+| Start live translation | Click menu bar icon → **Start Live Translation** |
+| Stop live translation | Click menu bar icon → **Stop Live Translation** |
 | View transcription | Click the menu bar icon → **Texts** section |
 | Copy last result | Click the copy button in the Texts section |
 | Open Settings | Click menu bar icon → **Settings** |
@@ -116,6 +129,8 @@ You can change the global hotkey to any supported key combination in **Settings 
 
 The menu bar popover shows:
 
+- **Live Transcript** — current live ASR output
+- **Live Translation** — current translated output
 - **After Whisper** — raw transcription
 - **After Qwen** — cleaned-up final text (when Qwen is enabled)
 - **Model status** — Whisper and Qwen load states
@@ -137,6 +152,9 @@ Open **Settings** from the menu bar popover.
 | **Enable logging** | Write detailed logs for debugging |
 | **Paste delay** | Delay (ms) before pasting — increase if the target app misses the paste |
 | **Max recording** | Maximum recording duration in seconds |
+| **Live audio source** | `Microphone` or `System Audio` for realtime translation |
+| **Live target language** | Output language for realtime translation |
+| **Live update interval** | How often live translation refreshes |
 
 ### Models & Storage
 
@@ -150,9 +168,9 @@ Choose Whisper and Qwen model sizes. Larger models are slower but more accurate.
 
 | Qwen | Size | Best for |
 |------|------|----------|
-| Qwen 3.5 0.8B | ~450 MB | Fast rewriting |
-| **Qwen 3.5 2B** *(default)* | ~1.2 GB | Best balance |
-| Qwen 3.5 4B | ~2.3 GB | Highest quality |
+| Qwen 3 0.6B | ~335 MB | Fastest live translation |
+| **Qwen 3 1.7B** *(default)* | ~930 MB | Best balance for translation + rewrite |
+| Qwen 3.5 2B | ~1.2 GB | Heavier rewrite-focused option |
 
 ### Prompt
 
@@ -207,6 +225,14 @@ If Qwen still reloads slowly on every recording, check the **Diagnostics** windo
 
 ---
 
+### System audio translation does not start
+
+- Check that **Screen Recording** permission is granted
+- Restart the app after granting Screen Recording if macOS does not resume capture immediately
+- If needed, open **System Settings → Privacy & Security → Screen Recording** and re-enable QwenWhisper manually
+
+---
+
 ### Files & Folders permission dialog keeps appearing
 
 Open **Settings → General → Request Documents Access** to navigate directly to the relevant Privacy pane and grant access permanently.
@@ -244,7 +270,7 @@ swift test
 ### Build a Release DMG
 
 ```bash
-./scripts/package_release.sh 0.2.2
+./scripts/package_release.sh 0.4.0
 ```
 
 Produces:
@@ -252,8 +278,8 @@ Produces:
 ```
 dist/
   QwenWhisper.app
-  QwenWhisper-0.2.2-macos-arm64.zip
-  QwenWhisper-0.2.2-macos-arm64.dmg
+  QwenWhisper-0.4.0-macos-arm64.zip
+  QwenWhisper-0.4.0-macos-arm64.dmg
 ```
 
 For signed and notarized releases, see [docs/releasing.md](docs/releasing.md).
@@ -286,7 +312,7 @@ docs/
 |---------|---------|
 | [WhisperKit](https://github.com/argmaxinc/WhisperKit) | On-device speech recognition |
 | [mlx-swift](https://github.com/ml-explore/mlx-swift) | Apple Silicon ML framework |
-| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | LLM inference (Qwen 3.5 support) |
+| [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) | LLM inference (Qwen 3 / Qwen 3.5 support) |
 | [swift-transformers](https://github.com/huggingface/swift-transformers) | HuggingFace Hub model download |
 
 ---

@@ -83,6 +83,40 @@ private struct GeneralTab: View {
                 in: 5...120
             )
 
+            Section("Live Translation") {
+                Picker("Audio source", selection: Binding(
+                    get: { controller.settings.liveAudioSource },
+                    set: { controller.settings.liveAudioSource = $0; controller.saveSettings() }
+                )) {
+                    ForEach(AudioInputSource.allCases) { source in
+                        Text(source.title).tag(source)
+                    }
+                }
+
+                Picker("Target language", selection: Binding(
+                    get: { controller.settings.liveTranslationTargetLanguage },
+                    set: { controller.settings.liveTranslationTargetLanguage = $0; controller.saveSettings() }
+                )) {
+                    ForEach(TranslationTargetLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+
+                Stepper(
+                    "Update interval: \(controller.settings.liveTranslationIntervalMs) ms",
+                    value: Binding(
+                        get: { controller.settings.liveTranslationIntervalMs },
+                        set: { controller.settings.liveTranslationIntervalMs = $0; controller.saveSettings() }
+                    ),
+                    in: 600...3000,
+                    step: 100
+                )
+
+                Text("Global hotkey still controls push-to-talk dictation. Realtime translation is started from the menu bar button.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             AccessibilityPermissionRow(controller: controller)
 
             Button("Request Documents Access") {

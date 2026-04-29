@@ -122,7 +122,8 @@ func appControllerCompletesThePipelineWithInjectedServices() async throws {
             speechRecognizer: recognizer,
             textRewriter: rewriter,
             textInjector: injector,
-            modelRuntime: models
+            modelRuntime: models,
+            liveTranslator: MockLiveTranslator()
         )
     )
 
@@ -131,7 +132,7 @@ func appControllerCompletesThePipelineWithInjectedServices() async throws {
 
     await controller.toggleRecording()
 
-    #expect(controller.status == .idle)
+    #expect(controller.status == PipelineStatus.idle)
     #expect(controller.lastSnapshot?.sourceText == "привет мир")
     #expect(controller.lastSnapshot?.rewrittenText == "Привет, мир.")
     #expect(controller.lastSnapshot?.insertMethod == .accessibility)
@@ -166,7 +167,8 @@ func appControllerStopsBeforeTranscriptionForTooShortRecordings() async throws {
             speechRecognizer: recognizer,
             textRewriter: rewriter,
             textInjector: injector,
-            modelRuntime: MockModelRuntime()
+            modelRuntime: MockModelRuntime(),
+            liveTranslator: MockLiveTranslator()
         )
     )
 
@@ -201,7 +203,8 @@ func appControllerFailsFastWhenMicrophonePermissionIsDenied() async throws {
             speechRecognizer: MockSpeechRecognizer(resultText: "ignored"),
             textRewriter: MockTextRewriter(resultText: "ignored"),
             textInjector: MockTextInjector(),
-            modelRuntime: MockModelRuntime()
+            modelRuntime: MockModelRuntime(),
+            liveTranslator: MockLiveTranslator()
         )
     )
 
@@ -218,13 +221,17 @@ func appControllerFailsFastWhenMicrophonePermissionIsDenied() async throws {
 private final class MockPermissionManager: PermissionManaging, @unchecked Sendable {
     let microphoneAllowed: Bool
     let accessibilityAllowed: Bool
+    let screenCaptureAllowed: Bool
 
-    init(microphoneAllowed: Bool, accessibilityAllowed: Bool) {
+    init(microphoneAllowed: Bool, accessibilityAllowed: Bool, screenCaptureAllowed: Bool = true) {
         self.microphoneAllowed = microphoneAllowed
         self.accessibilityAllowed = accessibilityAllowed
+        self.screenCaptureAllowed = screenCaptureAllowed
     }
 
     func ensureMicrophoneAccess() async -> Bool { microphoneAllowed }
+    func isScreenCaptureAuthorized() -> Bool { screenCaptureAllowed }
+    func requestScreenCaptureAccess() async -> Bool { screenCaptureAllowed }
     func isAccessibilityTrusted(prompt: Bool) -> Bool { accessibilityAllowed }
 }
 
@@ -337,4 +344,73 @@ private actor MockModelRuntime: ModelRuntimeManaging {
         settings: AppSettings,
         progress: @escaping @Sendable (ModelAvailability.State) -> Void
     ) async {}
+}
+
+private actor MockLiveTranslator: LiveTranslating {
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+
+    func start(
+        configuration: LiveTranslationConfiguration,
+        onAudioLevel: @escaping @Sendable (Float) -> Void,
+        onUpdate: @escaping @Sendable (LiveTranslationUpdate) -> Void
+    ) async throws {
+        startCallCount += 1
+        onAudioLevel(-24)
+        onUpdate(.init(
+            transcriptText: "hello world",
+            translatedText: configuration.targetLanguage.usesWhisperNativeTranslation ? "hello world" : "привет мир",
+            isFinal: false
+        ))
+    }
+
+    func stop() async {
+        stopCallCount += 1
+    }
+}
+
+@MainActor
+@Test
+func appControllerStartsAndStopsLiveTranslationWithInjectedService() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    let settingsStore = SettingsStore(defaults: defaults)
+    let permissions = MockPermissionManager(
+        microphoneAllowed: true,
+        accessibilityAllowed: true,
+        screenCaptureAllowed: true
+    )
+    let liveTranslator = MockLiveTranslator()
+    var settings = AppSettings.defaults
+    settings.liveTranslationTargetLanguage = .russian
+
+    let controller = AppController(
+        settings: settings,
+        dependencies: .init(
+            settingsStore: settingsStore,
+            logger: AppLogger(),
+            permissionManager: permissions,
+            launchAtLoginService: MockLaunchAtLoginService(),
+            hotkeyMonitor: MockHotkeyMonitor(),
+            audioCaptureService: MockAudioCaptureService(durationSeconds: 1),
+            speechRecognizer: MockSpeechRecognizer(resultText: "ignored"),
+            textRewriter: MockTextRewriter(resultText: "ignored"),
+            textInjector: MockTextInjector(),
+            modelRuntime: MockModelRuntime(),
+            liveTranslator: liveTranslator
+        )
+    )
+
+    await controller.toggleLiveTranslation()
+
+    #expect(controller.isLiveTranslationActive)
+    #expect(controller.latestLiveTranscriptText == "hello world")
+    #expect(controller.latestLiveTranslationText == "привет мир")
+    #expect(await liveTranslator.startCallCount == 1)
+
+    await controller.toggleLiveTranslation()
+
+    #expect(!controller.isLiveTranslationActive)
+    #expect(controller.status == PipelineStatus.idle)
+    #expect(await liveTranslator.stopCallCount == 1)
 }

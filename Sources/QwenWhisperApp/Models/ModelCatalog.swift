@@ -15,8 +15,7 @@ struct ModelPreset: Identifiable, Equatable {
 
 enum ModelCatalog {
     static let defaultWhisperModelID = "small"
-    // Qwen3.5 uses model_type "qwen3_5" supported in mlx-swift-lm main branch.
-    static let defaultQwenModelID = "mlx-community/Qwen3.5-2B-4bit"
+    static let defaultQwenModelID = "mlx-community/Qwen3-1.7B-4bit"
 
     static let whisperPresets: [ModelPreset] = [
         ModelPreset(
@@ -46,31 +45,29 @@ enum ModelCatalog {
     ]
 
     static let qwenPresets: [ModelPreset] = [
-        // Qwen3.5 — model_type "qwen3_5", supported via mlx-swift-lm main branch.
-        // Qwen3.5 is a thinking-capable model; <think> blocks are stripped automatically.
         ModelPreset(
             kind: .qwen,
-            title: "Qwen3.5 0.8B (Fast)",
-            modelID: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
-            description: "Fastest rewrite, good quality for short dictations.",
-            recommendedFor: "Low-latency everyday dictation",
-            estimatedSizeLabel: "~450 MB"
+            title: "Qwen3 0.6B (Fast)",
+            modelID: "mlx-community/Qwen3-0.6B-4bit",
+            description: "Smallest fresh Qwen3 preset. Best latency for live translation.",
+            recommendedFor: "Realtime translation on smaller Macs",
+            estimatedSizeLabel: "~335 MB"
         ),
         ModelPreset(
             kind: .qwen,
-            title: "Qwen3.5 2B (Recommended)",
+            title: "Qwen3 1.7B (Recommended)",
+            modelID: "mlx-community/Qwen3-1.7B-4bit",
+            description: "Better multilingual translation and rewrite quality with still-local latency.",
+            recommendedFor: "Balanced live translation and dictation cleanup",
+            estimatedSizeLabel: "~930 MB"
+        ),
+        ModelPreset(
+            kind: .qwen,
+            title: "Qwen3.5 2B",
             modelID: "mlx-community/Qwen3.5-2B-4bit",
-            description: "Best balance of speed and editing quality.",
-            recommendedFor: "Everyday post-editing of Russian dictation",
+            description: "Still available as a heavier custom-quality option for rewrite-focused use.",
+            recommendedFor: "Higher quality rewrite when realtime latency matters less",
             estimatedSizeLabel: "~1.2 GB"
-        ),
-        ModelPreset(
-            kind: .qwen,
-            title: "Qwen3.5 4B",
-            modelID: "mlx-community/Qwen3.5-4B-4bit",
-            description: "Best editing quality. Higher RAM and latency.",
-            recommendedFor: "Best quality when speed is not critical",
-            estimatedSizeLabel: "~2.3 GB"
         ),
     ]
 }

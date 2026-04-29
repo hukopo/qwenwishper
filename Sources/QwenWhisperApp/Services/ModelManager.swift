@@ -25,7 +25,7 @@ struct ModelAvailability: Sendable, Equatable {
     var qwen: State = .idle
 }
 
-private final class WhisperRuntimeBox: @unchecked Sendable {
+final class WhisperRuntimeBox: @unchecked Sendable {
     let value: WhisperKit
 
     init(value: WhisperKit) {
@@ -47,7 +47,9 @@ actor ModelManager: ModelRuntimeManaging {
     private let fileManager: FileManager
     private let rootURL: URL
     private var whisperKit: WhisperRuntimeBox?
+    private var loadedWhisperModelID: String?
     private var qwenContainer: ModelContainer?
+    private var loadedQwenModelID: String?
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -57,7 +59,9 @@ actor ModelManager: ModelRuntimeManaging {
 
     func resetAll() throws {
         whisperKit = nil
+        loadedWhisperModelID = nil
         qwenContainer = nil
+        loadedQwenModelID = nil
         if fileManager.fileExists(atPath: rootURL.path) {
             try fileManager.removeItem(at: rootURL)
         }
@@ -121,6 +125,7 @@ actor ModelManager: ModelRuntimeManaging {
         DiagnosticTrace.write("Retrying Whisper model \(settings.whisperModelID).")
         // Clear the in-memory runtime so prepareWhisper will re-initialize.
         whisperKit = nil
+        loadedWhisperModelID = nil
         // Remove the model directory so WhisperKit re-downloads it from scratch.
         if let existingDir = existingWhisperDirectory(settings: settings) {
             try? fileManager.removeItem(at: existingDir)
@@ -143,6 +148,7 @@ actor ModelManager: ModelRuntimeManaging {
         DiagnosticTrace.write("Retrying Qwen model \(settings.qwenModelID).")
         // Clear the in-memory container so prepareQwen will re-initialize.
         qwenContainer = nil
+        loadedQwenModelID = nil
         // Remove the fingerprint so prepareQwen treats the model as not yet downloaded.
         let fp = rootURL.appendingPathComponent("qwen-\(safeFileName(settings.qwenModelID)).json")
         try? fileManager.removeItem(at: fp)
@@ -157,6 +163,11 @@ actor ModelManager: ModelRuntimeManaging {
     }
 
     func prepareWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws {
+        if loadedWhisperModelID != settings.whisperModelID {
+            whisperKit = nil
+            loadedWhisperModelID = nil
+        }
+
         if whisperKit != nil {
             DiagnosticTrace.write("Whisper runtime already initialized for model \(settings.whisperModelID).")
             progress(.ready)
@@ -190,8 +201,20 @@ actor ModelManager: ModelRuntimeManaging {
         }
 
         whisperKit = whisper
+        loadedWhisperModelID = settings.whisperModelID
         DiagnosticTrace.write("Whisper runtime ready. modelFolder=\(whisper.value.modelFolder?.path ?? "nil")")
         progress(.ready)
+    }
+
+    func liveWhisperRuntime(
+        settings: AppSettings,
+        progress: @escaping @Sendable (ModelAvailability.State) -> Void
+    ) async throws -> WhisperRuntimeBox {
+        try await prepareWhisper(settings: settings, progress: progress)
+        guard let whisperKit else {
+            throw AppFailure.transcriptionFailed("WhisperKit was not initialized.")
+        }
+        return whisperKit
     }
 
     func transcribe(audioURL: URL, settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws -> TranscriptionResultPayload {
@@ -291,6 +314,11 @@ actor ModelManager: ModelRuntimeManaging {
     }
 
     func prepareQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws -> ModelContainer {
+        if loadedQwenModelID != settings.qwenModelID {
+            qwenContainer = nil
+            loadedQwenModelID = nil
+        }
+
         if let qwenContainer {
             // Container already in memory — return immediately without emitting a progress
             // event, so callers like finishRecordingAndProcess can manage state themselves.
@@ -330,6 +358,7 @@ actor ModelManager: ModelRuntimeManaging {
         // even if fingerprint writing below fails.
         let container = loaded.container
         qwenContainer = container
+        loadedQwenModelID = settings.qwenModelID
         progress(.ready)
         // Persist a lightweight marker (file sizes only, no full SHA256 read) so
         // cachedAvailability and preloadQwenIfCached know the model is on disk.
