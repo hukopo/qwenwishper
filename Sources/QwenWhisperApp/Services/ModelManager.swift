@@ -174,7 +174,7 @@ actor ModelManager: ModelRuntimeManaging {
             return
         }
 
-        let existingFolder = existingWhisperDirectory(settings: settings)
+        let existingFolder = validatedWhisperDirectory(settings: settings)
         progress(existingFolder != nil ? .loading : .downloading(0))
         DiagnosticTrace.write("Preparing Whisper runtime for model \(settings.whisperModelID).")
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -194,7 +194,24 @@ actor ModelManager: ModelRuntimeManaging {
 
         // Load + prewarm phase (CoreML compilation).
         progress(.loading)
-        let whisper = try await loadWhisperRuntime(modelFolder: modelFolder)
+        let whisper: WhisperRuntimeBox
+        do {
+            whisper = try await loadWhisperRuntime(modelFolder: modelFolder)
+        } catch {
+            if modelFolder == existingFolder {
+                DiagnosticTrace.write("Whisper existing cache failed to load. Removing corrupted folder and retrying download.")
+                try? fileManager.removeItem(at: modelFolder)
+                let downloadedFolder = try await downloadWhisperModel(
+                    modelID: settings.whisperModelID,
+                    downloadBase: whisperDownloadBase,
+                    onProgress: { fraction in progress(.downloading(fraction)) }
+                )
+                progress(.loading)
+                whisper = try await loadWhisperRuntime(modelFolder: downloadedFolder)
+            } else {
+                throw error
+            }
+        }
 
         if let modelFolderFromKit = whisper.value.modelFolder {
             try persistFingerprint(for: modelFolderFromKit, key: "whisper-\(settings.whisperModelID)")
@@ -427,6 +444,33 @@ actor ModelManager: ModelRuntimeManaging {
     private func existingQwenFingerprint(settings: AppSettings) -> Bool {
         let qwenFingerprint = rootURL.appendingPathComponent("qwen-\(safeFileName(settings.qwenModelID)).json")
         return fileManager.fileExists(atPath: qwenFingerprint.path)
+    }
+
+    private func validatedWhisperDirectory(settings: AppSettings) -> URL? {
+        guard let directory = existingWhisperDirectory(settings: settings) else {
+            return nil
+        }
+
+        let requiredRelativePaths = [
+            "AudioEncoder.mlmodelc/weights/weight.bin",
+            "MelSpectrogram.mlmodelc/weights/weight.bin",
+            "TextDecoder.mlmodelc/weights/weight.bin",
+        ]
+
+        let missingPaths = requiredRelativePaths.filter { relativePath in
+            let absolutePath = directory.appendingPathComponent(relativePath).path
+            return !fileManager.fileExists(atPath: absolutePath)
+        }
+
+        guard missingPaths.isEmpty else {
+            DiagnosticTrace.write(
+                "Whisper cache is incomplete for model \(settings.whisperModelID). Missing: \(missingPaths.joined(separator: ", "))."
+            )
+            try? fileManager.removeItem(at: directory)
+            return nil
+        }
+
+        return directory
     }
 
     private func qwenRuntimePreflightFailure() -> String? {
