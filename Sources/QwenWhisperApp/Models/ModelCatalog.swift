@@ -15,7 +15,7 @@ struct ModelPreset: Identifiable, Equatable {
 
 enum ModelCatalog {
     static let defaultWhisperModelID = "small"
-    static let defaultQwenModelID = "mlx-community/Qwen3-1.7B-4bit"
+    static let defaultQwenModelID = "mlx-community/Qwen3.5-0.8B-4bit"
 
     static let whisperPresets: [ModelPreset] = [
         ModelPreset(
@@ -34,40 +34,24 @@ enum ModelCatalog {
             recommendedFor: "Everyday Russian dictation",
             estimatedSizeLabel: "~240 MB"
         ),
-        ModelPreset(
-            kind: .whisper,
-            title: "Medium",
-            modelID: "medium",
-            description: "Highest local quality. Slower and uses more RAM.",
-            recommendedFor: "Maximum transcription accuracy",
-            estimatedSizeLabel: "~750 MB"
-        ),
     ]
 
     static let qwenPresets: [ModelPreset] = [
         ModelPreset(
             kind: .qwen,
-            title: "Qwen3 0.6B (Fast)",
-            modelID: "mlx-community/Qwen3-0.6B-4bit",
-            description: "Smallest fresh Qwen3 preset. Best latency for live translation.",
-            recommendedFor: "Realtime translation on smaller Macs",
-            estimatedSizeLabel: "~335 MB"
-        ),
-        ModelPreset(
-            kind: .qwen,
-            title: "Qwen3 1.7B (Recommended)",
-            modelID: "mlx-community/Qwen3-1.7B-4bit",
-            description: "Better multilingual translation and rewrite quality with still-local latency.",
-            recommendedFor: "Balanced live translation and dictation cleanup",
-            estimatedSizeLabel: "~930 MB"
+            title: "Qwen3.5 0.8B (Recommended)",
+            modelID: "mlx-community/Qwen3.5-0.8B-4bit",
+            description: "Small and fast. Good enough for cleanup and live translation.",
+            recommendedFor: "Everyday dictation and live translation",
+            estimatedSizeLabel: "~620 MB"
         ),
         ModelPreset(
             kind: .qwen,
             title: "Qwen3.5 2B",
             modelID: "mlx-community/Qwen3.5-2B-4bit",
-            description: "Still available as a heavier custom-quality option for rewrite-focused use.",
-            recommendedFor: "Higher quality rewrite when realtime latency matters less",
-            estimatedSizeLabel: "~1.2 GB"
+            description: "Better quality, a bit slower.",
+            recommendedFor: "Rewrite quality over speed",
+            estimatedSizeLabel: "~1.7 GB"
         ),
     ]
 }

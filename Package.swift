@@ -11,10 +11,6 @@ let package = Package(
         .executable(
             name: "QwenWhisperApp",
             targets: ["QwenWhisperApp"]
-        ),
-        .executable(
-            name: "WhisperProbe",
-            targets: ["WhisperProbe"]
         )
     ],
     dependencies: [
@@ -45,12 +41,6 @@ let package = Package(
             name: "WhisperBridge",
             dependencies: [
                 .product(name: "WhisperKit", package: "WhisperKit")
-            ]
-        ),
-        .executableTarget(
-            name: "WhisperProbe",
-            dependencies: [
-                "WhisperBridge"
             ]
         ),
         .testTarget(
