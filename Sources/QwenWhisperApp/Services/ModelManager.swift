@@ -1,6 +1,5 @@
 import CryptoKit
 import Foundation
-import Hub
 import MLX
 import MLXLLM
 import MLXLMCommon

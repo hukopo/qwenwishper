@@ -1,7 +1,9 @@
 import Foundation
-import Hub
+import HuggingFace
 import MLX
+import MLXHuggingFace
 import MLXLMCommon
+import Tokenizers
 
 /// Loads the Qwen model container. Uses the MLX default device (GPU/Metal on Apple Silicon).
 /// Whisper runs on CoreML/Neural Engine and does not compete for the same compute units,
@@ -16,26 +18,24 @@ func loadQwenContainer(
     progress: @escaping @Sendable (String) -> Void
 ) async throws -> (modelDirectory: URL, container: ModelContainer) {
     progress("Qwen loader entered.")
-    let hub = HubApi(downloadBase: rootURL)
-    let configuration = ModelConfiguration(
-        id: modelID,
-        defaultPrompt: "Исправь текст"
-    )
+    let downloader = #hubDownloader(HubClient(cache: HubCache(cacheDirectory: rootURL.appendingPathComponent("hub"))))
 
-    progress("Qwen downloadModel started.")
-    let modelDirectory = try await downloadModel(hub: hub, configuration: configuration) { progressValue in
-        progress("Qwen download progress callback: \(progressValue)")
+    progress("Qwen download started.")
+    let modelDirectory = try await downloader.download(
+        id: modelID,
+        revision: nil,
+        matching: ["*.safetensors", "*.json", "*.jinja", "*.txt"],
+        useLatest: false
+    ) { progressValue in
         downloadProgress(progressValue.fractionCompleted)
     }
-    progress("Qwen downloadModel finished. modelDirectory=\(modelDirectory.path)")
+    progress("Qwen download finished. modelDirectory=\(modelDirectory.path)")
 
     // Signal transition: files are on disk, now loading weights into memory (slow).
     onDownloadComplete()
 
     progress("Qwen loadModelContainer started.")
-    let container = try await loadModelContainer(hub: hub, configuration: configuration) { progressValue in
-        progress("Qwen load progress callback: \(progressValue)")
-    }
+    let container = try await loadModelContainer(from: modelDirectory, using: #huggingFaceTokenizerLoader())
     progress("Qwen loadModelContainer finished.")
 
     return (modelDirectory, container)
@@ -74,14 +74,7 @@ func rewriteText(
 
     var output = ""
     for await generation in stream {
-        switch generation {
-        case .chunk(let chunk):
-            output += chunk
-        case .info:
-            break
-        case .toolCall:
-            break
-        }
+        output += generation.chunk ?? ""
     }
     log("MLXTextRewriter generation finished. rawLength=\(output.count)")
 
@@ -130,12 +123,7 @@ func translateText(
 
     var output = ""
     for await generation in stream {
-        switch generation {
-        case .chunk(let chunk):
-            output += chunk
-        case .info, .toolCall:
-            break
-        }
+        output += generation.chunk ?? ""
     }
 
     let translated = RewritePromptBuilder.sanitizeModelOutput(output)

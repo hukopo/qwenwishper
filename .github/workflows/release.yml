@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-release:
-    runs-on: macos-14
+    runs-on: macos-26
     env:
       APP_NAME: QwenWhisper
       EXECUTABLE_NAME: QwenWhisperApp
@@ -26,16 +26,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Show toolchain
         run: |
-          set -euo pipefail
-          XCODE_APP="$(find /Applications -maxdepth 1 -type d -name 'Xcode_16*.app' | sort | tail -n1)"
-          if [[ -z "$XCODE_APP" ]]; then
-            echo "No Xcode 16 installation found on runner." >&2
-            ls -1 /Applications | grep '^Xcode' || true
-            exit 1
-          fi
-          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
           swift --version
 

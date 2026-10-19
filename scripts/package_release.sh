@@ -18,8 +18,8 @@ ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$ROOT_DIR/scripts/macos/entitlements.pli
 # MLX Metal shaders — must be bundled next to the executable for Qwen inference.
 # Path is taken from the env or the default dev-build cache location.
 MLX_METALLIB="${MLX_METALLIB:-$ROOT_DIR/.build/mlx.metallib}"
-MLX_VERSION="0.30.6"
-MLX_WHEEL_URL="https://files.pythonhosted.org/packages/f3/85/44406b521f920248fad621334d4dc15e77660a494edf890e7cbee33bf38d/mlx_metal-${MLX_VERSION}-py3-none-macosx_14_0_arm64.whl"
+MLX_VERSION="0.32.2"
+MLX_WHEEL_URL="https://files.pythonhosted.org/packages/f7/ab/ba1952908c5d2a5070cf1cfbfea0161c4751ea62299e2776819810917483/mlx_metal-${MLX_VERSION}-py3-none-macosx_14_0_arm64.whl"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"

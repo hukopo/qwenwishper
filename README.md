@@ -61,7 +61,7 @@ Any other WhisperKit or MLX model can be set via "Custom" in Settings. Qwen can 
 ```bash
 swift build -c release --target QwenWhisperApp
 swift run QwenWhisperApp
-swift test                                  # needs full Xcode
+swift test                                  # with only CLT installed, pass -F to its Testing.framework
 ./scripts/package_release.sh 0.4.0          # app, zip and dmg in dist/
 ```
 
