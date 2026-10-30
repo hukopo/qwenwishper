@@ -371,7 +371,8 @@ final class AppController: ObservableObject {
         }
         try audioCaptureService.startRecording(maxDuration: .seconds(settings.maxRecordingSeconds)) { [weak self] in
             Task { @MainActor in
-                self?.hotkeyReleased()
+                guard let self, self.isRecording else { return }
+                await self.toggleRecording()
             }
         }
 

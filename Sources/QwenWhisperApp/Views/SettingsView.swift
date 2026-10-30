@@ -80,7 +80,8 @@ private struct GeneralTab: View {
                     get: { controller.settings.maxRecordingSeconds },
                     set: { controller.settings.maxRecordingSeconds = $0; controller.saveSettings() }
                 ),
-                in: 5...120
+                in: 5...600,
+                step: 5
             )
 
             Section("Live Translation") {

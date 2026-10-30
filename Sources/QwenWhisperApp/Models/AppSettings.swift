@@ -66,7 +66,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         launchAtLogin: false,
         didPromptLaunchAtLogin: false,
         pasteDelayMs: 120,
-        maxRecordingSeconds: 30,
+        maxRecordingSeconds: 120,
         liveAudioSource: .microphone,
         liveTranslationTargetLanguage: .english,
         liveTranslationIntervalMs: 1_200,

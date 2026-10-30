@@ -249,7 +249,9 @@ actor ModelManager: ModelRuntimeManaging {
             withoutTimestamps: true,
             wordTimestamps: false,
             noSpeechThreshold: 0.6,
-            concurrentWorkerCount: 4
+            concurrentWorkerCount: 4,
+            // Without VAD chunking WhisperKit decodes only the first 30s window.
+            chunkingStrategy: .vad
         )
 
         DiagnosticTrace.write("Starting Whisper transcription for \(audioURL.lastPathComponent).")
@@ -275,7 +277,8 @@ actor ModelManager: ModelRuntimeManaging {
                 logProbThreshold: nil,
                 firstTokenLogProbThreshold: nil,
                 noSpeechThreshold: nil,
-                concurrentWorkerCount: 4
+                concurrentWorkerCount: 4,
+                chunkingStrategy: .vad
             )
             fallbackText = try await transcribeText(
                 whisperKit: whisperKit.value,
@@ -302,7 +305,8 @@ actor ModelManager: ModelRuntimeManaging {
                 logProbThreshold: nil,
                 firstTokenLogProbThreshold: nil,
                 noSpeechThreshold: nil,
-                concurrentWorkerCount: 4
+                concurrentWorkerCount: 4,
+                chunkingStrategy: .vad
             )
             finalText = try await transcribeText(
                 whisperKit: whisperKit.value,
@@ -410,7 +414,7 @@ actor ModelManager: ModelRuntimeManaging {
 
         var entries: [ModelFingerprint.Entry] = []
         while let fileURL = enumerator?.nextObject() as? URL {
-            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            let values = try fileURL.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values.isRegularFile == true else { continue }
 
             let relativePath = fileURL.path.replacingOccurrences(of: directory.path + "/", with: "")

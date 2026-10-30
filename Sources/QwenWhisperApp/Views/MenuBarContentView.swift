@@ -3,7 +3,6 @@ import SwiftUI
 struct MenuBarContentView: View {
     @ObservedObject var controller: AppController
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -21,14 +20,16 @@ struct MenuBarContentView: View {
                 Spacer()
                 HStack(spacing: 8) {
                     Button("Settings") {
+                        openWindow(id: "settings")
                         NSApp.activate(ignoringOtherApps: true)
-                        openSettings()
                     }
+                    .keyboardShortcut(",")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
                     Button("Diagnostics") {
                         openWindow(id: "diagnostics")
+                        NSApp.activate(ignoringOtherApps: true)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -36,6 +37,7 @@ struct MenuBarContentView: View {
                     Button("Quit") {
                         NSApplication.shared.terminate(nil)
                     }
+                    .keyboardShortcut("q")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
@@ -55,6 +57,10 @@ struct MenuBarContentView: View {
                 .disabled(!controller.canToggleLiveTranslation)
 
                 Text("Live mode: \(controller.settings.liveAudioSource.title) -> \(controller.settings.liveTranslationTargetLanguage.title)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text("\(controller.settings.hotkey.readableName) — запись / стоп (глобально) · ⌘, — настройки · ⌘Q — выход")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

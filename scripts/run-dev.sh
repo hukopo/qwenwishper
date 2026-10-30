@@ -80,5 +80,17 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
+# Stable identity keeps TCC grants across rebuilds; fall back to ad-hoc (grants reset every build).
+DEV_IDENTITY="QwenWhisper Dev"
+if security find-certificate -c "$DEV_IDENTITY" >/dev/null 2>&1; then
+  # metallib sits in Contents/MacOS, so codesign treats it as nested code that must be signed first.
+  [[ -f "$MACOS_DIR/mlx.metallib" ]] && codesign --force --sign "$DEV_IDENTITY" "$MACOS_DIR/mlx.metallib"
+  codesign --force --sign "$DEV_IDENTITY" --identifier "$BUNDLE_ID" "$APP_DIR"
+else
+  echo "⚠ No '$DEV_IDENTITY' cert — run scripts/make-dev-cert.sh once, or permissions reset every build."
+  [[ -f "$MACOS_DIR/mlx.metallib" ]] && codesign --force --sign - "$MACOS_DIR/mlx.metallib"
+  codesign --force --sign - "$APP_DIR"
+fi
+
 echo "Launching $APP_DIR …"
 open "$APP_DIR"

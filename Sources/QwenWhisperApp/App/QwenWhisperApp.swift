@@ -13,7 +13,8 @@ struct QwenWhisperApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
+        // ponytail: plain Window instead of Settings scene — openSettings() is unreliable from an accessory MenuBarExtra.
+        Window("QwenWhisper Settings", id: "settings") {
             SettingsView(controller: controller)
         }
 
