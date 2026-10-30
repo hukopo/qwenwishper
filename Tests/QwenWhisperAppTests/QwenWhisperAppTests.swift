@@ -72,7 +72,7 @@ func settingsStoreMigratesLegacyPromptIntoEditorPreset() throws {
     defaults.set(try JSONSerialization.data(withJSONObject: payload), forKey: "app_settings")
 
     let loaded = store.load()
-    let editorPreset = loaded.promptPresets.first(where: { $0.id == RewritePromptBuilder.defaultPresetID })
+    let editorPreset = loaded.promptPresets.first(where: { $0.id == "editor" })
 
     #expect(editorPreset?.prompt == legacyPrompt)
     #expect(loaded.selectedPresetID == RewritePromptBuilder.defaultPresetID)
@@ -92,7 +92,7 @@ func settingsStoreNormalizesMissingSelectedPreset() throws {
     let loaded = store.load()
 
     #expect(loaded.selectedPresetID == RewritePromptBuilder.defaultPresetID)
-    #expect(loaded.qwenSystemPrompt == RewritePromptBuilder.defaultSystemPrompt)
+    #expect(loaded.qwenSystemPrompt == RewritePromptBuilder.defaultPreset(for: RewritePromptBuilder.defaultPresetID)?.prompt)
 }
 
 @MainActor

@@ -7,12 +7,22 @@ struct PromptPreset: Codable, Identifiable, Equatable, Sendable {
 }
 
 enum RewritePromptBuilder {
-    static let defaultPresetID = "editor"
+    static let defaultPresetID = "plain"
     static let defaultExampleText = "Хай! как дела? я сегодня ягод поел, пойдешь завтра со мной?"
 
     static let defaultPresets: [PromptPreset] = [
         PromptPreset(
             id: defaultPresetID,
+            name: "Обычный",
+            prompt: """
+                Убери из текста только слова-паразиты и звуки-заминки: типа, типо, ну, как бы, вот, короче, \
+                в общем, значит, это самое, м, мм, эм, ээ, а-а, хм.
+                Больше ничего не меняй: не переписывай, не сокращай, не исправляй стиль и порядок слов.
+                Верни только итоговый текст без пояснений.
+                """
+        ),
+        PromptPreset(
+            id: "editor",
             name: "Редактор",
             prompt: defaultSystemPrompt
         ),

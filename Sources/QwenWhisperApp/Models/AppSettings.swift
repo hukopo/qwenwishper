@@ -160,7 +160,7 @@ struct AppSettings: Codable, Equatable, Sendable {
             // If the user had a custom prompt, preserve it in the editor preset.
             if let oldPrompt = try? container.decode(String.self, forKey: .legacyQwenSystemPrompt),
                !oldPrompt.isEmpty, oldPrompt != RewritePromptBuilder.defaultSystemPrompt {
-                if let idx = presets.firstIndex(where: { $0.id == RewritePromptBuilder.defaultPresetID }) {
+                if let idx = presets.firstIndex(where: { $0.id == "editor" }) {
                     presets[idx].prompt = oldPrompt
                 }
             }
