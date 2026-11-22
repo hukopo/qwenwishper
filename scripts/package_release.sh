@@ -98,7 +98,7 @@ if (( ${#RESOURCE_BUNDLES} == 0 )); then
   exit 1
 fi
 BUNDLE_DST="$RESOURCES_DIR"
-if strings "$EXECUTABLE_DST" | grep -q 'could not load resource bundle: from'; then
+if LC_ALL=C grep -qa 'could not load resource bundle: from' "$EXECUTABLE_DST"; then
   # ponytail: root content can't be sealed by codesign; switch to swiftbuild before signing releases.
   if [[ -n "$SIGNING_IDENTITY" ]]; then
     echo "error: native SwiftPM accessor needs bundles in the .app root, which codesign rejects" >&2
