@@ -86,6 +86,31 @@ chmod +x "$EXECUTABLE_DST"
 cp "$MLX_METALLIB" "$MACOS_DIR/mlx.metallib"
 echo "✓ mlx.metallib bundled into app"
 
+# Bundle the SwiftPM resource bundles, otherwise Bundle.module traps at runtime with
+# "could not load resource bundle" (opening Settings crashes on the hotkey recorder).
+# Where the generated accessor looks depends on the build system:
+#   - swiftbuild backend: Contents/Resources (Bundle.main.resourceURL)
+#   - native SwiftPM (CI today): the .app root (Bundle.main.bundleURL) + a hardcoded build path
+BIN_PATH="$(swift build -c release --show-bin-path)"
+RESOURCE_BUNDLES=("$BIN_PATH"/*.bundle(N))
+if (( ${#RESOURCE_BUNDLES} == 0 )); then
+  echo "error: no SwiftPM resource bundles found in $BIN_PATH" >&2
+  exit 1
+fi
+BUNDLE_DST="$RESOURCES_DIR"
+if strings "$EXECUTABLE_DST" | grep -q 'could not load resource bundle: from'; then
+  # ponytail: root content can't be sealed by codesign; switch to swiftbuild before signing releases.
+  if [[ -n "$SIGNING_IDENTITY" ]]; then
+    echo "error: native SwiftPM accessor needs bundles in the .app root, which codesign rejects" >&2
+    exit 1
+  fi
+  BUNDLE_DST="$APP_DIR"
+fi
+for bundle in "${RESOURCE_BUNDLES[@]}"; do
+  cp -R "$bundle" "$BUNDLE_DST/"
+  echo "✓ bundled $(basename "$bundle") into ${BUNDLE_DST#$DIST_DIR/}"
+done
+
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
