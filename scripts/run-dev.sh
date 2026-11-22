@@ -62,6 +62,15 @@ if [[ -f "$MLX_METALLIB_CACHE" ]]; then
   cp "$MLX_METALLIB_CACHE" "$MACOS_DIR/mlx.metallib"
 fi
 
+# Copy SwiftPM resource bundles into Contents/Resources — that is where the
+# generated Bundle.module accessor looks them up. Without them the app traps with
+# "could not load resource bundle" (opening Settings crashes on the hotkey recorder).
+BIN_DIR="$(dirname "$SRC")"
+for bundle in "$BIN_DIR"/*.bundle(N); do
+  cp -R "$bundle" "$CONTENTS_DIR/Resources/"
+  echo "✓ bundled $(basename "$bundle")"
+done
+
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

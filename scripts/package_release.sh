@@ -86,6 +86,32 @@ chmod +x "$EXECUTABLE_DST"
 cp "$MLX_METALLIB" "$MACOS_DIR/mlx.metallib"
 echo "✓ mlx.metallib bundled into app"
 
+# Bundle the SwiftPM resource bundles. The generated Bundle.module accessor looks
+# them up in Contents/Resources, so a package without its .bundle traps at runtime
+# with "could not load resource bundle" (e.g. opening Settings crashes on the
+# KeyboardShortcuts hotkey recorder).
+BIN_PATH="$(swift build -c release --show-bin-path)"
+RESOURCE_BUNDLES=("$BIN_PATH"/*.bundle(N))
+if (( ${#RESOURCE_BUNDLES} == 0 )); then
+  echo "error: no SwiftPM resource bundles found in $BIN_PATH" >&2
+  echo "       expected at least KeyboardShortcuts_KeyboardShortcuts.bundle" >&2
+  exit 1
+fi
+for bundle in "${RESOURCE_BUNDLES[@]}"; do
+  cp -R "$bundle" "$RESOURCES_DIR/"
+  echo "✓ bundled $(basename "$bundle")"
+done
+
+# The Xcode build produces a different accessor that looks in the .app root and at
+# a hardcoded build path — resources cannot be sealed there, so such a binary can
+# never work as a packaged app. Refuse to ship it.
+if strings "$EXECUTABLE_DST" | grep -qE '/\.build/.*\.bundle'; then
+  echo "error: $EXECUTABLE_NAME was built with Xcode's resource-bundle accessor" >&2
+  echo "       (binary contains a hardcoded .build path). Build with 'swift build -c release'" >&2
+  echo "       instead of Xcode, otherwise resource bundles are never found." >&2
+  exit 1
+fi
+
 cat > "$CONTENTS_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
