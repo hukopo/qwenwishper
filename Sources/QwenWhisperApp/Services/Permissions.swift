@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import AVFoundation
 import Foundation
@@ -28,7 +29,14 @@ final class PermissionManager: PermissionManaging, @unchecked Sendable {
         if isScreenCaptureAuthorized() {
             return true
         }
-        return CGRequestScreenCaptureAccess()
+        if CGRequestScreenCaptureAccess() {
+            return true
+        }
+        // macOS shows the prompt only once per app; afterwards the request silently returns false.
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+        return false
     }
 
     func isAccessibilityTrusted(prompt: Bool) -> Bool {
