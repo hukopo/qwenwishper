@@ -289,7 +289,29 @@ final class AppController: ObservableObject {
 
     func hotkeyPressed() {
         Task {
-            await toggleRecording()
+            await handleHotkey()
+        }
+    }
+
+    func handleHotkey() async {
+        if !isRealtimeActive {
+            if settings.hotkeyStartsLive && !isRecording {
+                await toggleLiveTranslation()
+            } else {
+                await toggleRecording()
+            }
+            return
+        }
+        await toggleLiveTranslation()
+        // Stopped from the hotkey: the user's cursor is in their app, so paste there like dictation does.
+        let text = latestLiveTranslationText
+        guard !text.isEmpty else { return }
+        do {
+            try await Task.sleep(for: .milliseconds(settings.pasteDelayMs))
+            let insertResult = try textInjector.insert(text: text)
+            record("Inserted live text using \(insertResult.method.rawValue).", level: .info)
+        } catch {
+            handle(error)
         }
     }
 
@@ -298,7 +320,9 @@ final class AppController: ObservableObject {
     }
 
     func toggleRecordingFromUI() {
-        hotkeyPressed()
+        Task {
+            await toggleRecording()
+        }
     }
 
     func toggleLiveTranslationFromUI() {
@@ -451,6 +475,7 @@ final class AppController: ObservableObject {
             status = .idle
             throw error
         }
+        guard isRealtimeActive else { return }  // stopped while models were loading
 
         record(
             "Live translation started. source=\(settings.liveAudioSource.rawValue) target=\(settings.liveTranslationTargetLanguage.rawValue).",

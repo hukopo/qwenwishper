@@ -3,7 +3,7 @@ import CoreMedia
 import Foundation
 import ScreenCaptureKit
 
-final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+final class SystemAudioCaptureService: NSObject, SCStreamOutput, SCStreamDelegate, LiveAudioCapturing, @unchecked Sendable {
     var onAudioLevel: (@Sendable (Float) -> Void)?
     var onSamples: (@Sendable ([Float]) -> Void)?
 

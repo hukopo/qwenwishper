@@ -48,8 +48,16 @@ final class FloatingStatusPanel {
 
         controller.$status
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] status in
-                self?.updateForStatus(status)
+            .sink { [weak self, weak controller] status in
+                guard let self else { return }
+                let wasLive = self.currentStatus.isLive
+                self.updateForStatus(status)
+                // Live session ended: put what was heard into the clipboard and show it.
+                if wasLive, !status.isLive, let text = controller?.latestLiveTranslationText, !text.isEmpty {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    self.showResult(text)
+                }
             }
             .store(in: &cancellables)
 
@@ -108,7 +116,7 @@ final class FloatingStatusPanel {
 
     private func show() {
         guard let panel else { return }
-        let size = state.resultText != nil ? Self.resultSize : Self.pipelineSize
+        let size = state.resultText != nil || currentStatus.isLive ? Self.resultSize : Self.pipelineSize
         positionPanel(panel, size: size)
         if !panel.isVisible {
             state.isVisible = false

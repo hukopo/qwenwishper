@@ -30,6 +30,7 @@ enum AudioInputSource: String, Codable, CaseIterable, Sendable, Identifiable {
 }
 
 enum TranslationTargetLanguage: String, Codable, CaseIterable, Sendable, Identifiable {
+    case original
     case english
     case russian
     case german
@@ -41,6 +42,8 @@ enum TranslationTargetLanguage: String, Codable, CaseIterable, Sendable, Identif
 
     var title: String {
         switch self {
+        case .original:
+            "No translation"
         case .english:
             "English"
         case .russian:
@@ -62,6 +65,10 @@ enum TranslationTargetLanguage: String, Codable, CaseIterable, Sendable, Identif
 
     var usesWhisperNativeTranslation: Bool {
         self == .english
+    }
+
+    var needsQwen: Bool {
+        self != .english && self != .original
     }
 }
 
@@ -131,6 +138,10 @@ enum PipelineStatus: Equatable {
     case liveTranslating
     case pasting
     case error(String)
+
+    var isLive: Bool {
+        self == .liveCapturing || self == .liveTranscribing || self == .liveTranslating
+    }
 
     var label: String {
         switch self {

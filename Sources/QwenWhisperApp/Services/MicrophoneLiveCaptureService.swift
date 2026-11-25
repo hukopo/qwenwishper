@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 
-final class MicrophoneLiveCaptureService: NSObject, @unchecked Sendable {
+final class MicrophoneLiveCaptureService: NSObject, LiveAudioCapturing, @unchecked Sendable {
     var onAudioLevel: (@Sendable (Float) -> Void)?
     var onSamples: (@Sendable ([Float]) -> Void)?
 

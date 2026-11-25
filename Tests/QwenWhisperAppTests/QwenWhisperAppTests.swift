@@ -414,3 +414,40 @@ func appControllerStartsAndStopsLiveTranslationWithInjectedService() async throw
     #expect(controller.status == PipelineStatus.idle)
     #expect(await liveTranslator.stopCallCount == 1)
 }
+
+@MainActor
+@Test
+func hotkeyInLiveModeShowsTextThenPastesItOnStop() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    let liveTranslator = MockLiveTranslator()
+    let injector = MockTextInjector()
+    var settings = AppSettings.defaults
+    settings.hotkeyStartsLive = true
+    settings.pasteDelayMs = 0
+
+    let controller = AppController(
+        settings: settings,
+        dependencies: .init(
+            settingsStore: SettingsStore(defaults: defaults),
+            logger: AppLogger(),
+            permissionManager: MockPermissionManager(microphoneAllowed: true, accessibilityAllowed: true, screenCaptureAllowed: true),
+            launchAtLoginService: MockLaunchAtLoginService(),
+            hotkeyMonitor: MockHotkeyMonitor(),
+            audioCaptureService: MockAudioCaptureService(durationSeconds: 1),
+            speechRecognizer: MockSpeechRecognizer(resultText: "ignored"),
+            textRewriter: MockTextRewriter(resultText: "ignored"),
+            textInjector: injector,
+            modelRuntime: MockModelRuntime(),
+            liveTranslator: liveTranslator
+        )
+    )
+
+    await controller.handleHotkey()
+    #expect(controller.isLiveTranslationActive)
+    #expect(!controller.isRecordingActive)
+
+    await controller.handleHotkey()
+    #expect(!controller.isLiveTranslationActive)
+    #expect(injector.insertedTexts == ["привет мир"])
+}

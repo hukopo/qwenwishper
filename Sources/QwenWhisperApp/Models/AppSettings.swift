@@ -68,7 +68,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         pasteDelayMs: 120,
         maxRecordingSeconds: 120,
         liveAudioSource: .microphone,
-        liveTranslationTargetLanguage: .english,
+        liveTranslationTargetLanguage: .original,
         liveTranslationIntervalMs: 1_200,
         whisperModelID: ModelCatalog.defaultWhisperModelID,
         qwenModelID: ModelCatalog.defaultQwenModelID,
@@ -86,6 +86,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     var liveAudioSource: AudioInputSource
     var liveTranslationTargetLanguage: TranslationTargetLanguage
     var liveTranslationIntervalMs: Int
+    /// Hotkey toggles live mode (text shown while speaking, pasted on stop) instead of record-then-transcribe.
+    var hotkeyStartsLive = false
     var whisperModelID: String
     var qwenModelID: String
     /// When false the Qwen rewrite step is skipped entirely; Whisper text is pasted as-is.
@@ -143,8 +145,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         liveTranslationTargetLanguage = (try? container.decode(
             TranslationTargetLanguage.self,
             forKey: .liveTranslationTargetLanguage
-        )) ?? .english
+        )) ?? .original
         liveTranslationIntervalMs = (try? container.decode(Int.self, forKey: .liveTranslationIntervalMs)) ?? 1_200
+        hotkeyStartsLive = (try? container.decode(Bool.self, forKey: .hotkeyStartsLive)) ?? false
         whisperModelID = try container.decode(String.self, forKey: .whisperModelID)
         qwenModelID = try container.decode(String.self, forKey: .qwenModelID)
         // Default true — old settings files without this key keep Qwen enabled.
@@ -173,7 +176,7 @@ struct AppSettings: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case hotkey, launchAtLogin, didPromptLaunchAtLogin, pasteDelayMs, maxRecordingSeconds
-        case liveAudioSource, liveTranslationTargetLanguage, liveTranslationIntervalMs
+        case liveAudioSource, liveTranslationTargetLanguage, liveTranslationIntervalMs, hotkeyStartsLive
         case whisperModelID, qwenModelID, qwenEnabled, loggingEnabled
         case promptPresets, selectedPresetID
         case legacyQwenSystemPrompt = "qwenSystemPrompt"
@@ -189,6 +192,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         try container.encode(liveAudioSource, forKey: .liveAudioSource)
         try container.encode(liveTranslationTargetLanguage, forKey: .liveTranslationTargetLanguage)
         try container.encode(liveTranslationIntervalMs, forKey: .liveTranslationIntervalMs)
+        try container.encode(hotkeyStartsLive, forKey: .hotkeyStartsLive)
         try container.encode(whisperModelID, forKey: .whisperModelID)
         try container.encode(qwenModelID, forKey: .qwenModelID)
         try container.encode(qwenEnabled, forKey: .qwenEnabled)

@@ -19,8 +19,8 @@ struct FloatingStatusView: View {
             .scaleEffect(x: 1, y: state.isVisible ? 1 : 0.01, anchor: .center)
             .opacity(state.isVisible ? 1 : 0)
             .animation(.spring(duration: 0.2, bounce: 0.1), value: state.isVisible)
-            .task(id: controller.status == .recording || controller.status == .liveCapturing) {
-                guard controller.status == .recording || controller.status == .liveCapturing else { return }
+            .task(id: controller.status == .recording || controller.status.isLive) {
+                guard controller.status == .recording || controller.status.isLive else { return }
                 while !Task.isCancelled {
                     let rawLevel = controller.audioLevel
                     let normalized = Float(max(0, min(1, Double((rawLevel + 50) / 50))))
@@ -67,22 +67,24 @@ struct FloatingStatusView: View {
     @ViewBuilder
     private var pipelineContent: some View {
         switch controller.status {
-        case .recording, .liveCapturing:
-            HStack(alignment: .bottom, spacing: 3) {
-                ForEach(0 ..< 5, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.white)
-                        .frame(width: 3, height: max(3, CGFloat(barLevels[i]) * 20))
-                        .animation(.easeInOut(duration: 0.1), value: barLevels[i])
-                }
+        case .recording:
+            levelBars
+        case .liveCapturing, .liveTranscribing, .liveTranslating:
+            HStack(spacing: 10) {
+                levelBars
+                Text(liveText)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                    .frame(width: 183, alignment: .leading)
             }
-            .frame(width: 27, height: 20)
-        case .transcribing, .liveTranscribing, .pasting:
+        case .transcribing, .pasting:
             ProgressView()
                 .tint(.white)
                 .scaleEffect(0.8)
                 .frame(width: 18, height: 18)
-        case .rewriting, .liveTranslating:
+        case .rewriting:
             ProgressView()
                 .tint(.white)
                 .scaleEffect(0.8)
@@ -96,6 +98,24 @@ struct FloatingStatusView: View {
             Color.clear
                 .frame(width: 18, height: 18)
         }
+    }
+
+    private var liveText: String {
+        guard controller.latestLiveTranslationText.isEmpty else { return controller.latestLiveTranslationText }
+        // The level stays at its floor until capture starts, which happens only once the model is loaded.
+        return controller.audioLevel <= -160 ? "Loading model…" : "Listening…"
+    }
+
+    private var levelBars: some View {
+        HStack(alignment: .bottom, spacing: 3) {
+            ForEach(0 ..< 5, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color.white)
+                    .frame(width: 3, height: max(3, CGFloat(barLevels[i]) * 20))
+                    .animation(.easeInOut(duration: 0.1), value: barLevels[i])
+            }
+        }
+        .frame(width: 27, height: 20)
     }
 
     private var pillBackground: some View {

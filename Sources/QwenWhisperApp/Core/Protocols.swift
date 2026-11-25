@@ -68,6 +68,14 @@ protocol ModelRuntimeManaging: Sendable {
     func retryQwen(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async
 }
 
+/// A live audio feed delivering 16 kHz mono samples (microphone, system audio, or a file in tests).
+protocol LiveAudioCapturing: AnyObject, Sendable {
+    var onAudioLevel: (@Sendable (Float) -> Void)? { get set }
+    var onSamples: (@Sendable ([Float]) -> Void)? { get set }
+    func start() async throws
+    func stop()
+}
+
 protocol LiveTranslating: Sendable {
     func start(
         configuration: LiveTranslationConfiguration,

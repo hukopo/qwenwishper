@@ -24,30 +24,32 @@ APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-EXECUTABLE_SRC="$ROOT_DIR/.build/arm64-apple-macosx/release/$EXECUTABLE_NAME"
 EXECUTABLE_DST="$MACOS_DIR/$EXECUTABLE_NAME"
 ZIP_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.zip"
 DMG_STAGING_DIR="$DIST_DIR/${APP_NAME}-dmg-staging"
 DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.dmg"
 
 sign_app_bundle() {
-  local path="$1"
+  local target="$1"
 
   if [[ -z "$SIGNING_IDENTITY" ]]; then
     return 0
   fi
 
-  codesign \
-    --force \
-    --sign "$SIGNING_IDENTITY" \
-    --timestamp \
-    --options runtime \
-    --entitlements "$ENTITLEMENTS_PATH" \
-    "$path"
+  # Hardened runtime + timestamp are for notarization, which needs a paid Developer ID.
+  # A self-signed identity only gives the app a stable signature, so TCC grants survive updates.
+  local extra=()
+  if [[ "$SIGNING_IDENTITY" == "Developer ID"* ]]; then
+    extra=(--timestamp --options runtime --entitlements "$ENTITLEMENTS_PATH")
+  fi
+
+  # metallib sits in Contents/MacOS, so codesign treats it as nested code that must be signed first.
+  codesign --force --sign "$SIGNING_IDENTITY" "$target/Contents/MacOS/mlx.metallib"
+  codesign --force --sign "$SIGNING_IDENTITY" "${extra[@]}" "$target"
 }
 
 sign_disk_image() {
-  local path="$1"
+  local target="$1"
 
   if [[ -z "$SIGNING_IDENTITY" ]]; then
     return 0
@@ -57,7 +59,7 @@ sign_disk_image() {
     --force \
     --sign "$SIGNING_IDENTITY" \
     --timestamp \
-    "$path"
+    "$target"
 }
 
 rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_STAGING_DIR" "$DMG_PATH"
@@ -77,9 +79,12 @@ else
 fi
 
 cd "$ROOT_DIR"
-swift build -c release
+# swiftbuild puts resource bundles where Contents/Resources works; native SwiftPM needs the .app root, which can't be signed.
+BUILD_FLAGS=(-c release --build-system swiftbuild)
+swift build "${BUILD_FLAGS[@]}"
+BIN_PATH="$(swift build "${BUILD_FLAGS[@]}" --show-bin-path)"
 
-cp "$EXECUTABLE_SRC" "$EXECUTABLE_DST"
+cp "$BIN_PATH/$EXECUTABLE_NAME" "$EXECUTABLE_DST"
 chmod +x "$EXECUTABLE_DST"
 
 # Bundle the MLX Metal shaders so Qwen works without Xcode on end-user machines.
@@ -90,8 +95,7 @@ echo "✓ mlx.metallib bundled into app"
 # "could not load resource bundle" (opening Settings crashes on the hotkey recorder).
 # Where the generated accessor looks depends on the build system:
 #   - swiftbuild backend: Contents/Resources (Bundle.main.resourceURL)
-#   - native SwiftPM (CI today): the .app root (Bundle.main.bundleURL) + a hardcoded build path
-BIN_PATH="$(swift build -c release --show-bin-path)"
+#   - native SwiftPM: the .app root (Bundle.main.bundleURL) + a hardcoded build path
 RESOURCE_BUNDLES=("$BIN_PATH"/*.bundle(N))
 if (( ${#RESOURCE_BUNDLES} == 0 )); then
   echo "error: no SwiftPM resource bundles found in $BIN_PATH" >&2
@@ -99,7 +103,7 @@ if (( ${#RESOURCE_BUNDLES} == 0 )); then
 fi
 BUNDLE_DST="$RESOURCES_DIR"
 if LC_ALL=C grep -qa 'could not load resource bundle: from' "$EXECUTABLE_DST"; then
-  # ponytail: root content can't be sealed by codesign; switch to swiftbuild before signing releases.
+  # Root content can't be sealed by codesign, so a native build can only ship unsigned.
   if [[ -n "$SIGNING_IDENTITY" ]]; then
     echo "error: native SwiftPM accessor needs bundles in the .app root, which codesign rejects" >&2
     exit 1
