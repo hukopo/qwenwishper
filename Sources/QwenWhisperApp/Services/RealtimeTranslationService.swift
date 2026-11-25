@@ -203,6 +203,7 @@ actor RealtimeTranslationService: LiveTranslating {
             temperatureFallbackCount: 2,
             usePrefillPrompt: true,
             detectLanguage: true,
+            skipSpecialTokens: true,
             withoutTimestamps: true,
             wordTimestamps: true,
             concurrentWorkerCount: 4

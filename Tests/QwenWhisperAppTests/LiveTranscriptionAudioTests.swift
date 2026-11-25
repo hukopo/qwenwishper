@@ -84,6 +84,7 @@ func liveTranscriptionAudioShowsWordsWhileSpeakingAndEndsWithFullText() async th
     print("Live updates:\n" + updates.map { "  \($0.captureFinished ? "after " : "during") | \($0.text)" }.joined(separator: "\n"))
 
     #expect(updates.contains { !$0.captureFinished }, "no text was shown while the audio was still playing")
+    #expect(!updates.contains { $0.text.contains("<|") }, "Whisper special tokens leaked into the text")
     for word in ["проверка", "погода", "парк"] {
         #expect(finalText.contains(word), "final text is missing \"\(word)\": \(finalText)")
     }
