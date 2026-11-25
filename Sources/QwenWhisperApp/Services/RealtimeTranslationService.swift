@@ -56,9 +56,10 @@ actor RealtimeTranslationService: LiveTranslating {
         runtimeSettings.qwenEnabled = true
 
         preparedWhisper = try await modelManager.liveWhisperRuntime(settings: runtimeSettings) { _ in }
-        preparedQwen = configuration.targetLanguage.usesWhisperNativeTranslation
-            ? nil
-            : try await modelManager.prepareQwen(settings: runtimeSettings) { _ in }
+        // Without Qwen the loop publishes the transcript itself as the result.
+        preparedQwen = configuration.targetLanguage.needsQwen
+            ? try await modelManager.prepareQwen(settings: runtimeSettings) { _ in }
+            : nil
 
         await sampleStore.reset()
         activeSource = configuration.source

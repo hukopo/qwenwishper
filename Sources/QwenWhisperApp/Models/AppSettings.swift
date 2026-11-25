@@ -68,7 +68,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         pasteDelayMs: 120,
         maxRecordingSeconds: 120,
         liveAudioSource: .microphone,
-        liveTranslationTargetLanguage: .english,
+        liveTranslationTargetLanguage: .original,
         liveTranslationIntervalMs: 1_200,
         whisperModelID: ModelCatalog.defaultWhisperModelID,
         qwenModelID: ModelCatalog.defaultQwenModelID,
@@ -143,7 +143,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         liveTranslationTargetLanguage = (try? container.decode(
             TranslationTargetLanguage.self,
             forKey: .liveTranslationTargetLanguage
-        )) ?? .english
+        )) ?? .original
         liveTranslationIntervalMs = (try? container.decode(Int.self, forKey: .liveTranslationIntervalMs)) ?? 1_200
         whisperModelID = try container.decode(String.self, forKey: .whisperModelID)
         qwenModelID = try container.decode(String.self, forKey: .qwenModelID)
