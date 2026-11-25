@@ -68,6 +68,14 @@ jobs:
           ./scripts/package_release.sh "$VERSION_NUMBER"
           codesign -d -r- dist/QwenWhisper.app
 
+      - name: Upload PR build
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: QwenWhisper-pr
+          path: dist/QwenWhisper-*-macos-arm64.zip
+          retention-days: 7
+
       - name: Notarize DMG
         if: ${{ github.ref_type == 'tag' && startsWith(env.SIGNING_IDENTITY, 'Developer ID') && env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' && env.APPLE_TEAM_ID != '' }}
         env:

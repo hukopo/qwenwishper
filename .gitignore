@@ -4,3 +4,6 @@ Package.resolved
 DerivedData/
 dist/
 .DS_Store
+
+# Release signing identity backup (private key!)
+.signing/
