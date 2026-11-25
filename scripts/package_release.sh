@@ -30,7 +30,7 @@ DMG_STAGING_DIR="$DIST_DIR/${APP_NAME}-dmg-staging"
 DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}-macos-arm64.dmg"
 
 sign_app_bundle() {
-  local path="$1"
+  local target="$1"
 
   if [[ -z "$SIGNING_IDENTITY" ]]; then
     return 0
@@ -44,12 +44,12 @@ sign_app_bundle() {
   fi
 
   # metallib sits in Contents/MacOS, so codesign treats it as nested code that must be signed first.
-  codesign --force --sign "$SIGNING_IDENTITY" "$path/Contents/MacOS/mlx.metallib"
-  codesign --force --sign "$SIGNING_IDENTITY" "${extra[@]}" "$path"
+  codesign --force --sign "$SIGNING_IDENTITY" "$target/Contents/MacOS/mlx.metallib"
+  codesign --force --sign "$SIGNING_IDENTITY" "${extra[@]}" "$target"
 }
 
 sign_disk_image() {
-  local path="$1"
+  local target="$1"
 
   if [[ -z "$SIGNING_IDENTITY" ]]; then
     return 0
@@ -59,7 +59,7 @@ sign_disk_image() {
     --force \
     --sign "$SIGNING_IDENTITY" \
     --timestamp \
-    "$path"
+    "$target"
 }
 
 rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_STAGING_DIR" "$DMG_PATH"
