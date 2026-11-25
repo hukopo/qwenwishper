@@ -49,7 +49,8 @@ extension QwenWhisperApp {
             let config = NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
             if let mic = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
                 let size = mic.size
-                mic.draw(in: NSRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height))
+                // Nudged down-right, badge-style.
+                mic.draw(in: NSRect(x: center.x - size.width / 2 + 1, y: center.y - size.height / 2 - 0.8, width: size.width, height: size.height))
             }
             return true
         }
