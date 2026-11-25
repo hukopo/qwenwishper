@@ -167,9 +167,12 @@ if [[ -f "$INSTALL_SCRIPT" ]]; then
   chmod +x "$DMG_STAGING_DIR/Install QwenWhisper.command"
 fi
 
+# hdiutil's own size estimate is flaky ("No space left on device"), so size the image explicitly.
+DMG_SIZE_MB=$(( $(du -sm "$DMG_STAGING_DIR" | cut -f1) * 13 / 10 + 20 ))
 hdiutil create \
   -volname "$APP_NAME" \
   -srcfolder "$DMG_STAGING_DIR" \
+  -size "${DMG_SIZE_MB}m" \
   -ov \
   -format UDZO \
   "$DMG_PATH" >/dev/null
