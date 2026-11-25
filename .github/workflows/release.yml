@@ -40,6 +40,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # The swiftbuild release build plus .app/.zip/.dmg copies can fill the runner disk.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.dotnet || true
+          df -h /
+
       - name: Show toolchain
         run: |
           xcodebuild -version
