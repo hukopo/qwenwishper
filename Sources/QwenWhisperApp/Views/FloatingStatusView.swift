@@ -72,7 +72,7 @@ struct FloatingStatusView: View {
         case .liveCapturing, .liveTranscribing, .liveTranslating:
             HStack(spacing: 10) {
                 levelBars
-                Text(controller.latestLiveTranslationText.isEmpty ? "Listening…" : controller.latestLiveTranslationText)
+                Text(liveText)
                     .font(.system(size: 12))
                     .foregroundStyle(.white)
                     .lineLimit(2)
@@ -98,6 +98,12 @@ struct FloatingStatusView: View {
             Color.clear
                 .frame(width: 18, height: 18)
         }
+    }
+
+    private var liveText: String {
+        guard controller.latestLiveTranslationText.isEmpty else { return controller.latestLiveTranslationText }
+        // The level stays at its floor until capture starts, which happens only once the model is loaded.
+        return controller.audioLevel <= -160 ? "Loading model…" : "Listening…"
     }
 
     private var levelBars: some View {

@@ -46,6 +46,7 @@ actor ModelManager: ModelRuntimeManaging {
     private let fileManager: FileManager
     private let rootURL: URL
     private var whisperKit: WhisperRuntimeBox?
+    private var whisperPreparation: Task<Void, Error>?
     private var loadedWhisperModelID: String?
     private var qwenContainer: ModelContainer?
     private var loadedQwenModelID: String?
@@ -162,6 +163,16 @@ actor ModelManager: ModelRuntimeManaging {
     }
 
     func prepareWhisper(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws {
+        // Launch preload, live start and dictation can all ask at once; share one CoreML load instead of three.
+        if let inFlight = whisperPreparation {
+            _ = try? await inFlight.value
+        }
+        let preparation = Task { try await self.loadWhisperIfNeeded(settings: settings, progress: progress) }
+        whisperPreparation = preparation
+        try await preparation.value
+    }
+
+    private func loadWhisperIfNeeded(settings: AppSettings, progress: @escaping @Sendable (ModelAvailability.State) -> Void) async throws {
         if loadedWhisperModelID != settings.whisperModelID {
             whisperKit = nil
             loadedWhisperModelID = nil

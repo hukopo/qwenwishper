@@ -28,17 +28,24 @@ private actor LiveAudioSampleStore {
 
 actor RealtimeTranslationService: LiveTranslating {
     private let modelManager: ModelManager
-    private let microphoneCapture = MicrophoneLiveCaptureService()
-    private let systemAudioCapture = SystemAudioCaptureService()
+    private let makeCapture: @Sendable (AudioInputSource) -> LiveAudioCapturing
 
     private var loopTask: Task<Void, Never>?
-    private var activeSource: AudioInputSource?
+    private var capture: LiveAudioCapturing?
+    /// Bumped by every start/stop so a start still loading models notices it was stopped meanwhile.
+    private var generation = 0
     private var sampleStore = LiveAudioSampleStore()
     private var preparedWhisper: WhisperRuntimeBox?
     private var preparedQwen: ModelContainer?
 
-    init(modelManager: ModelManager) {
+    init(
+        modelManager: ModelManager,
+        makeCapture: @escaping @Sendable (AudioInputSource) -> LiveAudioCapturing = { source in
+            source == .microphone ? MicrophoneLiveCaptureService() : SystemAudioCaptureService()
+        }
+    ) {
         self.modelManager = modelManager
+        self.makeCapture = makeCapture
     }
 
     func start(
@@ -49,6 +56,8 @@ actor RealtimeTranslationService: LiveTranslating {
         guard loopTask == nil else {
             throw AppFailure.alreadyBusy
         }
+        generation += 1
+        let startGeneration = generation
 
         var runtimeSettings = AppSettings.defaults
         runtimeSettings.whisperModelID = configuration.whisperModelID
@@ -61,23 +70,20 @@ actor RealtimeTranslationService: LiveTranslating {
             ? try await modelManager.prepareQwen(settings: runtimeSettings) { _ in }
             : nil
 
-        await sampleStore.reset()
-        activeSource = configuration.source
-
-        switch configuration.source {
-        case .microphone:
-            microphoneCapture.onSamples = { [sampleStore] samples in
-                Task { await sampleStore.append(samples) }
-            }
-            microphoneCapture.onAudioLevel = onAudioLevel
-            try microphoneCapture.start()
-        case .systemAudio:
-            systemAudioCapture.onSamples = { [sampleStore] samples in
-                Task { await sampleStore.append(samples) }
-            }
-            systemAudioCapture.onAudioLevel = onAudioLevel
-            try await systemAudioCapture.start()
+        // Model loading can take a while (CoreML compile); the user may have pressed stop meanwhile.
+        guard generation == startGeneration, loopTask == nil else {
+            DiagnosticTrace.write("Live start abandoned: stopped while models were loading.")
+            return
         }
+
+        await sampleStore.reset()
+        let capture = makeCapture(configuration.source)
+        capture.onSamples = { [sampleStore] samples in
+            Task { await sampleStore.append(samples) }
+        }
+        capture.onAudioLevel = onAudioLevel
+        try await capture.start()
+        self.capture = capture
 
         loopTask = Task { [weak self] in
             await self?.runLoop(configuration: configuration, onUpdate: onUpdate)
@@ -85,23 +91,14 @@ actor RealtimeTranslationService: LiveTranslating {
     }
 
     func stop() async {
+        generation += 1
         loopTask?.cancel()
         loopTask = nil
 
-        switch activeSource {
-        case .microphone:
-            microphoneCapture.stop()
-        case .systemAudio:
-            systemAudioCapture.stop()
-        case nil:
-            break
-        }
-
-        microphoneCapture.onSamples = nil
-        microphoneCapture.onAudioLevel = nil
-        systemAudioCapture.onSamples = nil
-        systemAudioCapture.onAudioLevel = nil
-        activeSource = nil
+        capture?.stop()
+        capture?.onSamples = nil
+        capture?.onAudioLevel = nil
+        capture = nil
         preparedWhisper = nil
         preparedQwen = nil
         await sampleStore.reset()

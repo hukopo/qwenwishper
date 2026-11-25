@@ -11,6 +11,18 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Metal toolchain
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+      - name: Run tests (incl. live transcription on a real audio file)
+        env:
+          RUN_MODEL_TESTS: "1"
+        run: swift test --build-system swiftbuild
+
   build-release:
     runs-on: macos-26
     env:

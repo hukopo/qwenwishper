@@ -475,6 +475,7 @@ final class AppController: ObservableObject {
             status = .idle
             throw error
         }
+        guard isRealtimeActive else { return }  // stopped while models were loading
 
         record(
             "Live translation started. source=\(settings.liveAudioSource.rawValue) target=\(settings.liveTranslationTargetLanguage.rawValue).",
