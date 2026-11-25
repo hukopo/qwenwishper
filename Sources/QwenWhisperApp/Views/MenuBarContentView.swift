@@ -56,6 +56,13 @@ struct MenuBarContentView: View {
                 .buttonStyle(.bordered)
                 .disabled(!controller.canToggleLiveTranslation)
 
+                Toggle("Hotkey starts live mode", isOn: Binding(
+                    get: { controller.settings.hotkeyStartsLive },
+                    set: { controller.settings.hotkeyStartsLive = $0; controller.saveSettings() }
+                ))
+                .toggleStyle(.checkbox)
+                .disabled(controller.isRecordingActive || controller.isLiveTranslationActive)
+
                 Text("Live mode: \(controller.settings.liveAudioSource.title) -> \(controller.settings.liveTranslationTargetLanguage.title)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
