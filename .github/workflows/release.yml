@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  # Builds and signs the app on PRs too, so packaging breaks show up before a release.
+  pull_request:
 
 permissions:
   contents: write
@@ -31,7 +33,10 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Import Developer ID certificate
+      - name: Install Metal toolchain
+        run: xcrun metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Import signing certificate
         if: ${{ env.DEVELOPER_ID_APPLICATION_CERT_BASE64 != '' && env.DEVELOPER_ID_APPLICATION_CERT_PASSWORD != '' && env.BUILD_KEYCHAIN_PASSWORD != '' }}
         env:
           CERT_BASE64: ${{ env.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
@@ -51,14 +56,20 @@ jobs:
 
       - name: Package release artifacts
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-pr' }}
         run: |
           set -euo pipefail
           VERSION_NUMBER="${VERSION#v}"
+          # An unsigned release gets a new identity, so every user would have to re-grant permissions.
+          if [[ "${{ github.ref_type }}" == tag && -z "$SIGNING_IDENTITY" ]]; then
+            echo "::error::Signing secrets are missing; refusing to publish an unsigned release."
+            exit 1
+          fi
           ./scripts/package_release.sh "$VERSION_NUMBER"
+          codesign -d -r- dist/QwenWhisper.app
 
       - name: Notarize DMG
-        if: ${{ env.SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' && env.APPLE_TEAM_ID != '' }}
+        if: ${{ github.ref_type == 'tag' && startsWith(env.SIGNING_IDENTITY, 'Developer ID') && env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' && env.APPLE_TEAM_ID != '' }}
         env:
           VERSION: ${{ github.ref_name }}
         run: |
@@ -67,6 +78,7 @@ jobs:
           ./scripts/notarize_release.sh "dist/QwenWhisper-${VERSION_NUMBER}-macos-arm64.dmg"
 
       - name: Publish release assets
+        if: ${{ github.ref_type == 'tag' }}
         uses: softprops/action-gh-release@v2
         with:
           files: |
