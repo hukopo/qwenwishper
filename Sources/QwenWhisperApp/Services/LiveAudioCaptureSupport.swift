@@ -60,7 +60,9 @@ final class LivePCMDownsampler {
         var conversionError: NSError?
         let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
             if didProvideInput {
-                outStatus.pointee = .endOfStream
+                // .noDataNow, not .endOfStream: end-of-stream finishes the converter for good,
+                // so every later mic buffer would convert to nothing.
+                outStatus.pointee = .noDataNow
                 return nil
             }
             didProvideInput = true

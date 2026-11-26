@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import QwenWhisperApp
@@ -450,4 +451,18 @@ func hotkeyInLiveModeShowsTextThenPastesItOnStop() async throws {
     await controller.handleHotkey()
     #expect(!controller.isLiveTranslationActive)
     #expect(injector.insertedTexts == ["привет мир"])
+}
+
+@Test
+func downsamplerKeepsConvertingEveryMicBuffer() throws {
+    // Mic taps deliver many small 48 kHz buffers; each one must come out as ~1/3 as many 16 kHz samples.
+    let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+    let downsampler = LivePCMDownsampler()
+    for _ in 0 ..< 5 {
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_800)!
+        buffer.frameLength = 4_800
+        for i in 0 ..< 4_800 { buffer.floatChannelData![0][i] = sin(Float(i) * 0.05) * 0.5 }
+        let samples = downsampler.convert(buffer)
+        #expect(samples.count > 1_200, "buffer converted to only \(samples.count) samples")
+    }
 }
