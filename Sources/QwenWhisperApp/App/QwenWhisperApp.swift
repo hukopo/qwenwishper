@@ -12,7 +12,10 @@ struct QwenWhisperApp: App {
             MenuBarContentView(controller: controller)
                 .frame(width: 360)
         } label: {
+            // Reading the controller here makes SwiftUI create it at launch (hotkey, model preload);
+            // without it the controller only appears once the menu is first opened.
             Image(nsImage: Self.menuBarIcon)
+                .accessibilityValue(controller.status.label)
         }
         .menuBarExtraStyle(.window)
 
