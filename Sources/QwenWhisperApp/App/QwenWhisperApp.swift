@@ -4,7 +4,7 @@ import SwiftUI
 @main
 struct QwenWhisperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var controller = AppController()
+    @ObservedObject private var controller = AppDelegate.controller
 
     var body: some Scene {
         // Fixed icon on purpose: progress is shown by the floating pill, not the menu bar.
@@ -12,10 +12,7 @@ struct QwenWhisperApp: App {
             MenuBarContentView(controller: controller)
                 .frame(width: 360)
         } label: {
-            // Reading the controller here makes SwiftUI create it at launch (hotkey, model preload);
-            // without it the controller only appears once the menu is first opened.
             Image(nsImage: Self.menuBarIcon)
-                .accessibilityValue(controller.status.label)
         }
         .menuBarExtraStyle(.window)
 
@@ -61,7 +58,12 @@ extension QwenWhisperApp {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // Started here, not from the menu's onAppear: that only fires once the menu is opened,
+    // so the hotkey and model preload would wait for the first click.
+    @MainActor static let controller = AppController()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        Self.controller.start()
     }
 }
